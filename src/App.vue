@@ -1,33 +1,77 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
-import { useTheme, type ThemeMode } from "@/composables/useTheme";
+import { ElButton, ElIcon } from "element-plus";
+import {
+  Close,
+  CopyDocument,
+  FullScreen,
+  Minus,
+} from "@element-plus/icons-vue";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 const route = useRoute();
-const { mode, setMode } = useTheme();
+const inTauri = isTauri();
+const maximized = ref(false);
 
-const navItems = computed(() => [
+const navItems = [
   { to: "/", icon: "◎", label: "总览" },
   { to: "/transactions", icon: "≡", label: "交易流水" },
   { to: "/import", icon: "↥", label: "导入账单" },
   { to: "/categories", icon: "▦", label: "分类管理" },
   { to: "/statistics", icon: "◔", label: "统计" },
   { to: "/settings", icon: "⚙", label: "设置" },
-]);
-
-const themeOptions: { value: ThemeMode; label: string }[] = [
-  { value: "light", label: "浅色" },
-  { value: "dark", label: "深色" },
-  { value: "system", label: "跟随系统" },
 ];
 
 const currentTitle = computed(() => String(route.meta.title ?? "净账"));
+
+async function syncMaximized() {
+  if (!inTauri) return;
+  try {
+    maximized.value = await getCurrentWindow().isMaximized();
+  } catch {
+    // 浏览器预览模式忽略
+  }
+}
+
+async function minimize() {
+  try {
+    await getCurrentWindow().minimize();
+  } catch {
+    // 浏览器预览模式忽略
+  }
+}
+
+async function toggleMaximize() {
+  try {
+    await getCurrentWindow().toggleMaximize();
+    await syncMaximized();
+  } catch {
+    // 浏览器预览模式忽略
+  }
+}
+
+async function closeWindow() {
+  try {
+    await getCurrentWindow().close();
+  } catch {
+    // 浏览器预览模式忽略
+  }
+}
+
+onMounted(() => {
+  void syncMaximized();
+  if (inTauri) window.addEventListener("resize", syncMaximized);
+});
+
+onUnmounted(() => window.removeEventListener("resize", syncMaximized));
 </script>
 
 <template>
   <div class="shell">
     <aside class="sidebar">
-      <div class="brand">
+      <div class="brand" data-tauri-drag-region>
         <span class="brand-mark">净</span>
         <div>
           <strong>净账</strong>
@@ -57,17 +101,28 @@ const currentTitle = computed(() => String(route.meta.title ?? "净账"));
 
     <div class="main">
       <header class="topbar">
-        <h1 class="page-title">{{ currentTitle }}</h1>
-        <div class="theme-switch" role="group" aria-label="主题">
-          <button
-            v-for="option in themeOptions"
-            :key="option.value"
-            type="button"
-            :class="{ selected: mode === option.value }"
-            @click="setMode(option.value)"
+        <div class="drag-area" data-tauri-drag-region @dblclick="toggleMaximize">
+          <span class="app-name">净账 LocalLedger</span>
+          <span class="divider"></span>
+          <h1 class="page-title">{{ currentTitle }}</h1>
+        </div>
+
+        <div v-if="inTauri" class="window-controls">
+          <ElButton class="win-btn" text circle title="最小化" @click="minimize">
+            <ElIcon><Minus /></ElIcon>
+          </ElButton>
+          <ElButton
+            class="win-btn"
+            text
+            circle
+            :title="maximized ? '还原' : '最大化'"
+            @click="toggleMaximize"
           >
-            {{ option.label }}
-          </button>
+            <ElIcon><component :is="maximized ? CopyDocument : FullScreen" /></ElIcon>
+          </ElButton>
+          <ElButton class="win-btn close" text circle title="关闭" @click="closeWindow">
+            <ElIcon><Close /></ElIcon>
+          </ElButton>
         </div>
       </header>
 
@@ -99,6 +154,7 @@ const currentTitle = computed(() => String(route.meta.title ?? "净账"));
   align-items: center;
   gap: 12px;
   padding: 4px 8px 24px;
+  user-select: none;
 }
 
 .brand-mark {
@@ -186,46 +242,74 @@ nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 60px;
+  height: 40px;
   flex-shrink: 0;
-  padding: 0 28px;
+  padding-left: 16px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.drag-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+}
+
+.app-name {
+  color: var(--text-faint);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.divider {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
 }
 
 .page-title {
   margin: 0;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.theme-switch {
+.window-controls {
   display: flex;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 999px;
-  background: var(--surface-2);
+  align-items: center;
+  height: 100%;
+  flex-shrink: 0;
 }
 
-.theme-switch button {
-  padding: 5px 12px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
+.win-btn {
+  width: 38px;
+  height: 40px;
+  margin: 0;
+  border-radius: 0;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 15px;
 }
 
-.theme-switch button.selected {
-  background: var(--surface);
+.win-btn:hover {
+  background: var(--surface-hover);
   color: var(--text);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.win-btn.close:hover {
+  background: var(--danger);
+  color: #fff;
 }
 
 .content {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 28px;
+  padding: 24px;
 }
 </style>

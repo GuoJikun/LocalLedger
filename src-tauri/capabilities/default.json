@@ -3,5 +3,12 @@
   "identifier": "default",
   "description": "主窗口默认能力：基础事件/窗口 + 原生文件对话框",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-start-dragging",
+    "core:window:allow-close",
+    "dialog:default"
+  ]
 }
