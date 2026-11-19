@@ -25,16 +25,6 @@ const kindOptions: { value: TransactionKind; label: string }[] = [
   { value: "transfer", label: "转账" },
 ];
 
-const milestones = [
-  { code: "M0", title: "脚手架", status: "已完成" },
-  { code: "M1", title: "数据底座", status: "已完成" },
-  { code: "M2", title: "账单导入", status: "已完成" },
-  { code: "M3", title: "流水与分类", status: "已完成" },
-  { code: "M4", title: "统计", status: "已完成" },
-  { code: "M5", title: "MVP 发布", status: "已完成" },
-  { code: "M6", title: "局域网同步", status: "后续版本" },
-];
-
 const total = computed(() => overview.value?.transaction_count ?? 0);
 
 function describe(value: unknown): string {
@@ -191,23 +181,6 @@ onMounted(loadData);
               </template>
             </el-table-column>
           </el-table>
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :md="12">
-        <el-card shadow="never" class="page-card">
-          <template #header>里程碑</template>
-          <el-timeline>
-            <el-timeline-item
-              v-for="item in milestones"
-              :key="item.code"
-              :timestamp="item.code + ' · ' + item.title"
-              placement="top"
-              :color="item.status === '已完成' ? 'var(--success)' : 'var(--text-faint)'"
-            >
-              {{ item.status }}
-            </el-timeline-item>
-          </el-timeline>
         </el-card>
       </el-col>
     </el-row>
