@@ -6,7 +6,7 @@ pub mod alipay;
 pub mod service;
 pub mod wechat;
 
-use chrono::{DateTime, FixedOffset, NaiveDateTime, SecondsFormat};
+use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, SecondsFormat};
 use serde::Serialize;
 use thiserror::Error;
 
@@ -293,17 +293,100 @@ pub(crate) fn parse_kind(raw: &str) -> Option<TransactionKind> {
     }
 }
 
+/// 平台账单常见时间格式（含中文日期与无分隔紧凑格式）。
+const TIME_FORMATS: &[&str] = &[
+    "%Y-%m-%d %H:%M:%S",
+    "%Y/%m/%d %H:%M:%S",
+    "%Y-%m-%d %H:%M",
+    "%Y/%m/%d %H:%M",
+    "%Y年%m月%d日 %H:%M:%S",
+    "%Y年%m月%d日 %H:%M",
+    "%Y%m%d %H%M%S",
+    "%Y%m%d%H%M%S",
+    "%Y-%m-%dT%H:%M:%S",
+];
+
+/// 从任意字符串里按数字段提取 年/月/日/时/分/秒，作为最后的兜底解析。
+fn extract_time_parts(value: &str) -> Option<[u32; 6]> {
+    let mut runs: Vec<String> = Vec::new();
+    let mut current = String::new();
+    for character in value.chars() {
+        if character.is_ascii_digit() {
+            current.push(character);
+        } else if !current.is_empty() {
+            runs.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.is_empty() {
+        runs.push(current);
+    }
+
+    if runs.len() >= 3 {
+        let mut parts = [0u32; 6];
+        parts[0] = runs[0].parse().ok()?;
+        parts[1] = runs[1].parse().ok()?;
+        parts[2] = runs[2].parse().ok()?;
+        parts[3] = runs
+            .get(3)
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0);
+        parts[4] = runs
+            .get(4)
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0);
+        parts[5] = runs
+            .get(5)
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0);
+        return Some(parts);
+    }
+
+    // 紧凑格式：20260105120000 / 202601051200 / 20260105
+    if runs.len() == 1 {
+        let digits = &runs[0];
+        if digits.len() >= 8 {
+            let mut parts = [0u32; 6];
+            parts[0] = digits.get(0..4)?.parse().ok()?;
+            parts[1] = digits.get(4..6)?.parse().ok()?;
+            parts[2] = digits.get(6..8)?.parse().ok()?;
+            if digits.len() >= 12 {
+                parts[3] = digits.get(8..10)?.parse().ok()?;
+                parts[4] = digits.get(10..12)?.parse().ok()?;
+            }
+            if digits.len() >= 14 {
+                parts[5] = digits.get(12..14)?.parse().ok()?;
+            }
+            return Some(parts);
+        }
+    }
+
+    None
+}
+
 /// 账单时间按中国大陆时区（UTC+8）解析并归一化为 UTC。
 pub(crate) fn parse_time(raw: &str) -> Option<String> {
     let value = raw.trim();
+    if value.is_empty() {
+        return None;
+    }
     if let Ok(datetime) = DateTime::parse_from_rfc3339(value) {
         return Some(to_utc_string(datetime));
     }
-    let naive = NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S")
-        .or_else(|_| NaiveDateTime::parse_from_str(value, "%Y/%m/%d %H:%M:%S"))
-        .ok()?;
+
     let offset = FixedOffset::east_opt(8 * 3600)?;
-    datetime_with_offset(naive, offset).map(to_utc_string)
+    for format in TIME_FORMATS {
+        if let Ok(naive) = NaiveDateTime::parse_from_str(value, format) {
+            return datetime_with_offset(naive, offset).map(to_utc_string);
+        }
+    }
+
+    let parts = extract_time_parts(value)?;
+    if !(1900..=2200).contains(&parts[0]) {
+        return None;
+    }
+    let date = NaiveDate::from_ymd_opt(parts[0] as i32, parts[1], parts[2])?;
+    let time = NaiveTime::from_hms_opt(parts[3], parts[4], parts[5])?;
+    datetime_with_offset(date.and_time(time), offset).map(to_utc_string)
 }
 
 fn datetime_with_offset(
@@ -342,7 +425,21 @@ mod tests {
 
     #[test]
     fn time_is_normalized_to_utc() {
-        let value = parse_time("2026-01-05 12:00:00").unwrap();
-        assert_eq!(value, "2026-01-05T04:00:00.000Z");
+        let cases = [
+            "2026-01-05 12:00:00",
+            "2026/1/5 12:00",
+            "2026年1月5日 12:00:00",
+            "2026年01月05日 12:00",
+            "20260105120000",
+            "2026-01-05T12:00:00+08:00",
+        ];
+        for value in cases {
+            assert_eq!(
+                parse_time(value).unwrap(),
+                "2026-01-05T04:00:00.000Z",
+                "无法解析: {value}"
+            );
+        }
+        assert_eq!(parse_time("").unwrap_or_default(), "");
     }
 }

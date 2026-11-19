@@ -31,7 +31,8 @@ pub fn parse(text: &str) -> ImportResult<ParsedBill> {
     }
 
     let (columns, records) = read_table(text, |header| {
-        header.iter().any(|value| value.contains("交易时间"))
+        header.len() >= 3
+            && header.iter().any(|value| value.contains("交易时间"))
             && header.iter().any(|value| value.contains("交易单号"))
     })?;
 
@@ -91,12 +92,13 @@ pub fn parse(text: &str) -> ImportResult<ParsedBill> {
             }
         };
 
-        let happened_at = match parse_time(&cell(&record, time)) {
+        let time_text = cell(&record, time);
+        let happened_at = match parse_time(&time_text) {
             Some(value) => value,
             None => {
                 issues.push(RowIssue {
                     line,
-                    reason: "交易时间格式无法识别".to_string(),
+                    reason: format!("交易时间格式无法识别: \"{time_text}\""),
                 });
                 continue;
             }

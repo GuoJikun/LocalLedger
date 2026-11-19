@@ -12,9 +12,11 @@ pub fn parse(text: &str) -> ImportResult<ParsedBill> {
     }
 
     let (columns, records) = read_table(text, |header| {
-        header
-            .iter()
-            .any(|value| value.contains("交易号") || value.contains("交易订单号"))
+        // 至少 3 列，避免把含关键字的说明行误判为表头。
+        header.len() >= 3
+            && header
+                .iter()
+                .any(|value| value.contains("交易号") || value.contains("交易订单号"))
             && header.iter().any(|value| value.contains("交易时间"))
     })?;
 
@@ -83,12 +85,13 @@ pub fn parse(text: &str) -> ImportResult<ParsedBill> {
             }
         };
 
-        let happened_at = match parse_time(&cell(&record, time)) {
+        let time_text = cell(&record, time);
+        let happened_at = match parse_time(&time_text) {
             Some(value) => value,
             None => {
                 issues.push(RowIssue {
                     line,
-                    reason: "交易时间格式无法识别".to_string(),
+                    reason: format!("交易时间格式无法识别: \"{time_text}\""),
                 });
                 continue;
             }
@@ -190,5 +193,13 @@ mod tests {
         assert_eq!(salary.input.amount, 1_200_000);
         assert_eq!(salary.input.external_id, "ALI-TAB-002");
         assert_eq!(salary.category_hint.as_deref(), Some("工资"));
+    }
+
+    #[test]
+    fn metadata_line_with_keywords_is_not_taken_as_header() {
+        let text = format!("说明：本账单包含交易时间与交易订单号信息\n{TAB_SAMPLE}");
+        let bill = parse(&text).unwrap();
+        assert_eq!(bill.rows.len(), 3);
+        assert_eq!(bill.issues.len(), 2);
     }
 }
