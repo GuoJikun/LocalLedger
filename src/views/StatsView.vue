@@ -21,7 +21,7 @@ echarts.use([
 ]);
 
 const { isDark } = useTheme();
-const months = ref(12);
+const months = ref(0);
 const selectedMonth = ref("");
 const breakdownKind = ref<"income" | "expense">("expense");
 const summaries = ref<MonthSummary[]>([]);
@@ -37,9 +37,10 @@ let pieChart: EChartsType | null = null;
 let lineChart: EChartsType | null = null;
 
 const monthOptions = [
-  { value: 6, label: "近 6 个月" },
-  { value: 12, label: "近 12 个月" },
-  { value: 24, label: "近 24 个月" },
+  { value: 0, label: "全部月份" },
+  { value: 6, label: "最近 6 个月（按数据）" },
+  { value: 12, label: "最近 12 个月（按数据）" },
+  { value: 24, label: "最近 24 个月（按数据）" },
 ];
 
 const kindOptions = [
@@ -95,7 +96,13 @@ function ensureChart(
   existing: EChartsType | null,
 ): EChartsType | null {
   if (!element) return null;
-  if (existing && !existing.isDisposed()) return existing;
+  // v-if 切换会替换 DOM 节点；实例仍绑在旧节点上时必须重建，否则图表画到看不见的旧节点。
+  if (existing && !existing.isDisposed() && existing.getDom() === element) {
+    return existing;
+  }
+  if (existing && !existing.isDisposed()) {
+    existing.dispose();
+  }
   return echarts.init(element);
 }
 
@@ -129,6 +136,7 @@ function renderCharts() {
       },
       true,
     );
+    barChart?.resize();
   }
 
   if (pieEl.value && slices.value.length) {
@@ -154,6 +162,7 @@ function renderCharts() {
       },
       true,
     );
+    pieChart?.resize();
   }
 
   if (lineEl.value && trend.value.length) {
@@ -182,6 +191,7 @@ function renderCharts() {
       },
       true,
     );
+    lineChart?.resize();
   }
 }
 

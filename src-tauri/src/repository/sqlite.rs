@@ -1,6 +1,5 @@
 //! Repository 的 SQLite 实现：所有写操作都在事务内追加 `sync_changes`。
 
-use chrono::SecondsFormat;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row, ToSql};
 use serde::Serialize;
 use uuid::Uuid;
@@ -761,24 +760,37 @@ impl AccountRepository for SqliteRepository<'_> {
 
 impl StatisticsRepository for SqliteRepository<'_> {
     fn monthly_summary(&self, months: i64) -> AppResult<Vec<MonthSummary>> {
-        let months = months.clamp(1, 120);
-        let since = chrono::Utc::now()
-            .checked_sub_months(chrono::Months::new(months as u32))
-            .unwrap_or_else(chrono::Utc::now)
-            .to_rfc3339_opts(SecondsFormat::Millis, true);
-
-        let mut statement = self.conn.prepare(
+        // months <= 0 表示全部；否则取「有数据的月份」中最近 N 个，而不是相对当前时间，
+        // 避免导入历史账单时大部分月份被过滤掉。
+        let sql = if months <= 0 {
             "SELECT substr(happened_at, 1, 7) AS month,
                     COALESCE(SUM(CASE WHEN kind = 'income' THEN amount ELSE 0 END), 0),
                     COALESCE(SUM(CASE WHEN kind = 'expense' THEN amount ELSE 0 END), 0),
                     COALESCE(SUM(CASE WHEN kind = 'transfer' THEN amount ELSE 0 END), 0),
                     COUNT(*)
              FROM transactions
-             WHERE deleted = 0 AND happened_at >= ?1
+             WHERE deleted = 0
              GROUP BY month
-             ORDER BY month DESC",
-        )?;
-        let rows = statement.query_map([since], |row| {
+             ORDER BY month DESC"
+                .to_string()
+        } else {
+            format!(
+                "SELECT substr(happened_at, 1, 7) AS month,
+                        COALESCE(SUM(CASE WHEN kind = 'income' THEN amount ELSE 0 END), 0),
+                        COALESCE(SUM(CASE WHEN kind = 'expense' THEN amount ELSE 0 END), 0),
+                        COALESCE(SUM(CASE WHEN kind = 'transfer' THEN amount ELSE 0 END), 0),
+                        COUNT(*)
+                 FROM transactions
+                 WHERE deleted = 0
+                 GROUP BY month
+                 ORDER BY month DESC
+                 LIMIT {}",
+                months.clamp(1, 240)
+            )
+        };
+
+        let mut statement = self.conn.prepare(&sql)?;
+        let rows = statement.query_map([], |row| {
             Ok(MonthSummary {
                 month: row.get(0)?,
                 income: row.get(1)?,
@@ -1173,6 +1185,10 @@ mod tests {
             Some("cat_salary".to_string()),
         ))
         .unwrap();
+
+        let all_months = repo.monthly_summary(0).unwrap();
+        assert_eq!(all_months.len(), 2);
+        assert_eq!(repo.monthly_summary(1).unwrap().len(), 1);
 
         let months = repo.monthly_summary(12).unwrap();
         let november = months.iter().find(|item| item.month == "2026-11").unwrap();
