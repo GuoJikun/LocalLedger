@@ -59,4 +59,9 @@ export const api = {
 
   previewBill: (path: string) => invoke<string>("preview_bill", { path }),
   importBill: (path: string) => invoke<ImportSummary>("import_bill", { path }),
+
+  backupDatabase: (path: string) => invoke<void>("backup_database", { path }),
+  restoreDatabase: (path: string) => invoke<void>("restore_database", { path }),
+  exportTransactionsCsv: (path: string) =>
+    invoke<number>("export_transactions_csv", { path }),
 };

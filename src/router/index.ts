@@ -4,7 +4,7 @@ import ImportView from "@/views/ImportView.vue";
 import TransactionsView from "@/views/TransactionsView.vue";
 import CategoriesView from "@/views/CategoriesView.vue";
 import StatsView from "@/views/StatsView.vue";
-import ModulePlaceholder from "@/components/ModulePlaceholder.vue";
+import SettingsView from "@/views/SettingsView.vue";
 
 const routes: RouteRecordRaw[] = [
   {
@@ -40,13 +40,8 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/settings",
     name: "settings",
-    component: ModulePlaceholder,
-    meta: {
-      title: "设置",
-      icon: "⚙",
-      description: "备份导出、外观与偏好设置，预计在 M5 实现。",
-      milestone: "M5",
-    },
+    component: SettingsView,
+    meta: { title: "设置", icon: "⚙" },
   },
 ];
 

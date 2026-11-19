@@ -124,6 +124,26 @@ pub fn ensure_device(conn: &Connection) -> AppResult<Device> {
     })
 }
 
+/// 恢复数据库后，把当前设备身份写回新库，避免后续变更日志的设备号不一致。
+pub fn force_device(conn: &Connection, id: &str, name: &str) -> AppResult<Device> {
+    let timestamp = now();
+    conn.execute(
+        "INSERT INTO meta (key, value) VALUES ('device_id', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![id],
+    )?;
+    conn.execute(
+        "INSERT INTO devices (id, name, last_seen_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, last_seen_at = excluded.last_seen_at",
+        params![id, name, timestamp],
+    )?;
+    Ok(Device {
+        id: id.to_string(),
+        name: name.to_string(),
+        last_seen_at: timestamp,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

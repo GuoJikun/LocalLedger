@@ -307,6 +307,105 @@ pub fn cursor_version(state: State<'_, AppState>) -> Result<i64, String> {
     Ok(value.unwrap_or(0))
 }
 
+fn backup_database_inner(path: &str, state: &AppState) -> Result<(), String> {
+    let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
+    // VACUUM INTO 生成一致性快照，且不会中断当前连接。
+    conn.execute("VACUUM INTO ?1", rusqlite::params![path])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn backup_database(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    backup_database_inner(&path, &state)
+}
+
+fn restore_database_inner(path: &str, state: &AppState) -> Result<(), String> {
+    let target = std::path::PathBuf::from(&state.database_path);
+    let source = std::path::PathBuf::from(path);
+    if !source.exists() {
+        return Err("备份文件不存在".to_string());
+    }
+
+    let mut guard = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
+    let placeholder = rusqlite::Connection::open_in_memory().map_err(|e| e.to_string())?;
+    let old = std::mem::replace(&mut *guard, placeholder);
+    drop(old); // 关闭原连接，释放 WAL 文件
+
+    std::fs::copy(&source, &target).map_err(|error| error.to_string())?;
+    for suffix in ["-wal", "-shm"] {
+        let mut sidecar = target.clone().into_os_string();
+        sidecar.push(suffix);
+        let _ = std::fs::remove_file(std::path::PathBuf::from(sidecar));
+    }
+
+    let restored = crate::db::open(&target).map_err(|error| error.to_string())?;
+    crate::db::migrate(&restored).map_err(|error| error.to_string())?;
+    crate::db::force_device(&restored, &state.device_id, &state.device_name)
+        .map_err(|error| error.to_string())?;
+    *guard = restored;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn restore_database(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    restore_database_inner(&path, &state)
+}
+
+fn export_transactions_csv_inner(path: &str, state: &AppState) -> Result<usize, String> {
+    let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
+    let transactions = repo(&conn, state)
+        .list_transactions(false)
+        .map_err(String::from)?;
+
+    let mut buffer: Vec<u8> = vec![0xEF, 0xBB, 0xBF]; // Excel 中文兼容的 BOM
+    {
+        let mut writer = csv::WriterBuilder::new().from_writer(&mut buffer);
+        writer
+            .write_record([
+                "交易号",
+                "时间",
+                "类型",
+                "金额(元)",
+                "交易对方",
+                "分类ID",
+                "备注",
+                "支付方式",
+                "状态",
+                "来源",
+            ])
+            .map_err(|error| error.to_string())?;
+        for item in &transactions {
+            writer
+                .write_record([
+                    &item.external_id,
+                    &item.happened_at,
+                    item.kind.as_str(),
+                    &format_amount_cents(item.amount),
+                    item.counterparty.as_deref().unwrap_or(""),
+                    item.category_id.as_deref().unwrap_or(""),
+                    item.note.as_deref().unwrap_or(""),
+                    item.payment_method.as_deref().unwrap_or(""),
+                    item.status.as_deref().unwrap_or(""),
+                    item.source.as_str(),
+                ])
+                .map_err(|error| error.to_string())?;
+        }
+        writer.flush().map_err(|error| error.to_string())?;
+    }
+    std::fs::write(path, buffer).map_err(|error| error.to_string())?;
+    Ok(transactions.len())
+}
+
+#[tauri::command]
+pub fn export_transactions_csv(path: String, state: State<'_, AppState>) -> Result<usize, String> {
+    export_transactions_csv_inner(&path, &state)
+}
+
+fn format_amount_cents(cents: i64) -> String {
+    format!("{}.{:02}", cents / 100, cents.abs() % 100)
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Mutex;
@@ -344,5 +443,72 @@ mod tests {
         assert_eq!(second.duplicates, 3);
 
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn backup_restore_and_csv_export_roundtrip() {
+        use crate::repository::{SqliteRepository, TransactionRepository};
+
+        let unique = uuid::Uuid::new_v4();
+        let db_path = std::env::temp_dir().join(format!("ll-db-{unique}.sqlite3"));
+        let conn = crate::db::open(&db_path).unwrap();
+        crate::db::migrate(&conn).unwrap();
+        {
+            let repo = SqliteRepository::new(&conn, "test-device");
+            let input = crate::domain::NewTransaction {
+                external_id: "BACKUP-1".to_string(),
+                amount: 1234,
+                counterparty: Some("备份测试".to_string()),
+                ..Default::default()
+            };
+            repo.insert_transaction(&input).unwrap();
+        }
+        let state = AppState {
+            conn: Mutex::new(conn),
+            device_id: "test-device".to_string(),
+            device_name: "测试机".to_string(),
+            database_path: db_path.to_string_lossy().into_owned(),
+        };
+
+        let backup = std::env::temp_dir().join(format!("ll-backup-{unique}.sqlite3"));
+        backup_database_inner(backup.to_string_lossy().as_ref(), &state).unwrap();
+        assert!(backup.exists());
+
+        let csv_path = std::env::temp_dir().join(format!("ll-export-{unique}.csv"));
+        let exported =
+            export_transactions_csv_inner(csv_path.to_string_lossy().as_ref(), &state).unwrap();
+        assert_eq!(exported, 1);
+        let csv = std::fs::read_to_string(&csv_path).unwrap();
+        assert!(csv.contains("交易号"));
+        assert!(csv.contains("BACKUP-1"));
+        assert!(csv.contains("12.34"));
+
+        {
+            let conn = state.conn.lock().unwrap();
+            SqliteRepository::new(&conn, "test-device")
+                .soft_delete_transaction(
+                    &SqliteRepository::new(&conn, "test-device")
+                        .list_transactions(false)
+                        .unwrap()[0]
+                        .id,
+                )
+                .unwrap();
+        }
+        restore_database_inner(backup.to_string_lossy().as_ref(), &state).unwrap();
+        {
+            let conn = state.conn.lock().unwrap();
+            assert_eq!(
+                SqliteRepository::new(&conn, "test-device")
+                    .list_transactions(false)
+                    .unwrap()
+                    .len(),
+                1
+            );
+        }
+
+        drop(state);
+        for path in [db_path, backup, csv_path] {
+            let _ = std::fs::remove_file(path);
+        }
     }
 }

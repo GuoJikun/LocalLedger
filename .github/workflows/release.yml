@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  bundles:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Linux 依赖
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libfuse2
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: 安装前端依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 打包 Windows（NSIS）
+        if: matrix.platform == 'windows-latest'
+        run: pnpm tauri build --bundles nsis
+
+      - name: 打包 macOS（dmg + app）
+        if: matrix.platform == 'macos-latest'
+        run: pnpm tauri build --bundles dmg,app
+
+      - name: 打包 Linux（deb + AppImage）
+        if: matrix.platform == 'ubuntu-latest'
+        run: pnpm tauri build --bundles deb,appimage
+
+      - name: 上传安装包
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-ledger-${{ matrix.platform }}
+          path: |
+            src-tauri/target/release/bundle/**/*.nsis.*
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.AppImage
+          if-no-files-found: warn

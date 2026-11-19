@@ -76,6 +76,9 @@ pub fn run() {
             commands::cursor_version,
             commands::preview_bill,
             commands::import_bill,
+            commands::backup_database,
+            commands::restore_database,
+            commands::export_transactions_csv,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");
