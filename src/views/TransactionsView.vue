@@ -1,14 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
-import {
-  ElButton,
-  ElDatePicker,
-  ElForm,
-  ElFormItem,
-  ElInput,
-  ElOption,
-  ElSelect,
-} from "element-plus";
+import { ElMessageBox } from "element-plus";
 import { api } from "@/api/tauri";
 import { formatAmount, yuanToFen } from "@/types/domain";
 import type {
@@ -67,6 +59,16 @@ function categoryName(id: string | null): string {
   return categories.value.find((item) => item.id === id)?.name ?? id;
 }
 
+function kindLabel(kind: TransactionKind): string {
+  return kindOptions.find((item) => item.value === kind)?.label ?? kind;
+}
+
+function kindTagType(kind: TransactionKind): "success" | "danger" | "info" {
+  if (kind === "income") return "success";
+  if (kind === "expense") return "danger";
+  return "info";
+}
+
 async function load() {
   loading.value = true;
   try {
@@ -104,8 +106,8 @@ function resetFilter() {
   void load();
 }
 
-function movePage(delta: number) {
-  filter.offset = Math.max(0, filter.offset + delta * filter.limit);
+function onPageChange(current: number) {
+  filter.offset = (current - 1) * filter.limit;
   void load();
 }
 
@@ -124,7 +126,8 @@ function openNew() {
   showEditor.value = true;
 }
 
-function openEdit(transaction: Transaction) {
+function openEdit(row: unknown) {
+  const transaction = row as Transaction;
   editingId.value = transaction.id;
   Object.assign(form, {
     amount: formatAmount(transaction.amount),
@@ -150,13 +153,12 @@ async function save() {
     formError.value = "时间格式无效";
     return;
   }
-  const categoryId = form.category_id || null;
   const fields = {
     kind: form.kind,
     amount,
     counterparty: form.counterparty || null,
     note: form.note || null,
-    category_id: categoryId,
+    category_id: form.category_id || null,
     happened_at: happenedAt,
     status: form.status || null,
   };
@@ -181,15 +183,18 @@ async function save() {
   }
 }
 
-async function remove(transaction: Transaction) {
-  if (!window.confirm(`确定删除「${transaction.counterparty || transaction.note || "该交易"}」吗？`)) {
-    return;
-  }
+async function remove(row: unknown) {
+  const transaction = row as Transaction;
   try {
+    await ElMessageBox.confirm(
+      `确定删除「${transaction.counterparty || transaction.note || "该交易"}」吗？`,
+      "删除确认",
+      { type: "warning" },
+    );
     await api.deleteTransaction(transaction.id);
     await load();
   } catch (cause) {
-    error.value = describe(cause);
+    if (cause !== "cancel" && cause !== "close") error.value = describe(cause);
   }
 }
 
@@ -206,141 +211,124 @@ onMounted(async () => {
         <h1>交易流水</h1>
         <p>搜索、筛选、编辑与手工录入；所有改动即时保存到本地数据库。</p>
       </div>
-      <button type="button" class="primary" @click="openNew">＋ 手工记一笔</button>
+      <el-button type="primary" @click="openNew">＋ 手工记一笔</el-button>
     </header>
 
-    <ElForm class="filters" :inline="true" @submit.prevent="applyFilter">
-      <ElFormItem label="关键词">
-        <ElInput
-          v-model="filter.keyword"
-          placeholder="对方 / 备注 / 单号"
-          clearable
-          @keyup.enter="applyFilter"
-        />
-      </ElFormItem>
-      <ElFormItem label="类型">
-        <ElSelect v-model="filter.kind" placeholder="全部" clearable class="filter-select">
-          <ElOption
-            v-for="item in kindOptions"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          />
-        </ElSelect>
-      </ElFormItem>
-      <ElFormItem label="分类">
-        <ElSelect v-model="filter.category_id" placeholder="全部" clearable class="filter-select">
-          <ElOption label="未分类" value="__none__" />
-          <ElOption
-            v-for="item in categories"
-            :key="item.id"
-            :label="item.name"
-            :value="item.id"
-          />
-        </ElSelect>
-      </ElFormItem>
-      <ElFormItem label="起始日期">
-        <ElDatePicker
-          v-model="filter.from"
-          type="date"
-          value-format="YYYY-MM-DD"
-          placeholder="选择日期"
-          class="filter-date"
-        />
-      </ElFormItem>
-      <ElFormItem label="结束日期">
-        <ElDatePicker
-          v-model="filter.to"
-          type="date"
-          value-format="YYYY-MM-DD"
-          placeholder="选择日期"
-          class="filter-date"
-        />
-      </ElFormItem>
-      <ElFormItem>
-        <ElButton type="primary" @click="applyFilter">筛选</ElButton>
-        <ElButton @click="resetFilter">重置</ElButton>
-      </ElFormItem>
-    </ElForm>
+    <el-form class="filters" :inline="true" @submit.prevent="applyFilter">
+      <el-form-item label="关键词">
+        <el-input v-model="filter.keyword" placeholder="对方 / 备注 / 单号" clearable @keyup.enter="applyFilter" />
+      </el-form-item>
+      <el-form-item label="类型">
+        <el-select v-model="filter.kind" placeholder="全部" clearable class="filter-select">
+          <el-option v-for="item in kindOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="分类">
+        <el-select v-model="filter.category_id" placeholder="全部" clearable class="filter-select">
+          <el-option label="未分类" value="__none__" />
+          <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="起始日期">
+        <el-date-picker v-model="filter.from" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" class="filter-date" />
+      </el-form-item>
+      <el-form-item label="结束日期">
+        <el-date-picker v-model="filter.to" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" class="filter-date" />
+      </el-form-item>
+      <el-form-item>
+        <el-button type="primary" @click="applyFilter">筛选</el-button>
+        <el-button @click="resetFilter">重置</el-button>
+      </el-form-item>
+    </el-form>
 
-    <p v-if="error" class="error">{{ error }}</p>
+    <el-alert v-if="error" type="error" :closable="false" show-icon :title="error" />
 
-    <section class="table-card">
-      <table>
-        <thead>
-          <tr>
-            <th>时间</th><th>类型</th><th>对方 / 说明</th><th>分类</th>
-            <th class="right">金额（元）</th><th>来源</th><th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in page?.items ?? []" :key="item.id">
-            <td class="muted">{{ new Date(item.happened_at).toLocaleString("zh-CN") }}</td>
-            <td>
-              <span class="tag" :class="item.kind">
-                {{ kindOptions.find((option) => option.value === item.kind)?.label }}
-              </span>
-            </td>
-            <td>
-              <strong>{{ item.counterparty || "—" }}</strong>
-              <small v-if="item.note">{{ item.note }}</small>
-            </td>
-            <td>{{ categoryName(item.category_id) }}</td>
-            <td class="right amount" :class="item.kind">
-              {{ item.kind === "income" ? "+" : "-" }}{{ formatAmount(item.amount) }}
-            </td>
-            <td class="muted">{{ item.source }}</td>
-            <td class="actions-cell">
-              <button type="button" class="link" @click="openEdit(item)">编辑</button>
-              <button type="button" class="link danger" @click="remove(item)">删除</button>
-            </td>
-          </tr>
-          <tr v-if="!page?.items.length">
-            <td colspan="7" class="empty">没有符合条件的交易。</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <el-card shadow="never" class="table-card">
+      <el-table :data="page?.items ?? []" v-loading="loading" size="small" empty-text="没有符合条件的交易">
+        <el-table-column label="时间" width="150">
+          <template #default="{ row }">
+            <span class="muted">{{ new Date(row.happened_at).toLocaleString("zh-CN") }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" width="80">
+          <template #default="{ row }">
+            <el-tag :type="kindTagType(row.kind)" size="small" effect="plain">{{ kindLabel(row.kind) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="对方 / 说明" min-width="180">
+          <template #default="{ row }">
+            <strong>{{ row.counterparty || "—" }}</strong>
+            <div v-if="row.note" class="note">{{ row.note }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="分类" width="100">
+          <template #default="{ row }">{{ categoryName(row.category_id) }}</template>
+        </el-table-column>
+        <el-table-column label="金额（元）" width="110" align="right">
+          <template #default="{ row }">
+            <span :class="['amount', row.kind]">
+              {{ row.kind === "income" ? "+" : "-" }}{{ formatAmount(row.amount) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="来源" width="80">
+          <template #default="{ row }"><span class="muted">{{ row.source }}</span></template>
+        </el-table-column>
+        <el-table-column label="操作" width="110" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button link type="danger" size="small" @click="remove(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
 
-    <footer class="pager">
-      <span>共 {{ page?.total ?? 0 }} 条 · {{ loading ? "加载中…" : "已保存" }}</span>
-      <div>
-        <button type="button" class="ghost" :disabled="filter.offset === 0" @click="movePage(-1)">上一页</button>
-        <button
-          type="button"
-          class="ghost"
-          :disabled="filter.offset + filter.limit >= (page?.total ?? 0)"
-          @click="movePage(1)"
-        >下一页</button>
+      <div class="pager">
+        <el-pagination
+          background
+          layout="total, prev, pager, next"
+          :current-page="Math.floor(filter.offset / filter.limit) + 1"
+          :page-size="filter.limit"
+          :total="page?.total ?? 0"
+          @current-change="onPageChange"
+        />
       </div>
-    </footer>
+    </el-card>
 
-    <div v-if="showEditor" class="overlay" @click.self="showEditor = false">
-      <form class="editor" @submit.prevent="save">
-        <h2>{{ editingId ? "编辑交易" : "手工记一笔" }}</h2>
-        <label>金额（元）<input v-model="form.amount" type="number" step="0.01" min="0.01" /></label>
-        <label>类型
-          <select v-model="form.kind">
-            <option v-for="item in kindOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-          </select>
-        </label>
-        <label>时间<input v-model="form.happened_at" type="datetime-local" /></label>
-        <label>对方<input v-model="form.counterparty" type="text" /></label>
-        <label>备注<input v-model="form.note" type="text" /></label>
-        <label>分类
-          <select v-model="form.category_id">
-            <option value="">未分类</option>
-            <option v-for="item in categories" :key="item.id" :value="item.id">{{ item.name }}</option>
-          </select>
-        </label>
-        <label>状态<input v-model="form.status" type="text" placeholder="选填" /></label>
-        <p v-if="formError" class="error">{{ formError }}</p>
-        <div class="editor-actions">
-          <button type="button" class="ghost" @click="showEditor = false">取消</button>
-          <button type="submit" class="primary">保存</button>
-        </div>
-      </form>
-    </div>
+    <el-dialog v-model="showEditor" :title="editingId ? '编辑交易' : '手工记一笔'" width="420px" :close-on-click-modal="false">
+      <el-form label-position="top" @submit.prevent="save">
+        <el-form-item label="金额（元）">
+          <el-input v-model="form.amount" type="number" min="0.01" step="0.01" />
+        </el-form-item>
+        <el-form-item label="类型">
+          <el-select v-model="form.kind" class="full-width">
+            <el-option v-for="item in kindOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="时间">
+          <el-date-picker v-model="form.happened_at" type="datetime" value-format="YYYY-MM-DDTHH:mm" class="full-width" />
+        </el-form-item>
+        <el-form-item label="对方">
+          <el-input v-model="form.counterparty" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="form.note" />
+        </el-form-item>
+        <el-form-item label="分类">
+          <el-select v-model="form.category_id" class="full-width">
+            <el-option label="未分类" value="" />
+            <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-input v-model="form.status" placeholder="选填" />
+        </el-form-item>
+      </el-form>
+      <el-alert v-if="formError" type="error" :closable="false" :title="formError" />
+      <template #footer>
+        <el-button @click="showEditor = false">取消</el-button>
+        <el-button type="primary" @click="save">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -348,8 +336,8 @@ onMounted(async () => {
 .transactions {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  max-width: 1200px;
+  gap: 16px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 
@@ -370,33 +358,8 @@ onMounted(async () => {
   color: var(--text-muted);
 }
 
-button:not(.el-button) {
-  padding: 7px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-}
-
-button.primary {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: #fff;
-}
-
-button.ghost:hover:not(:disabled),
-button.link:hover {
-  background: var(--surface-hover);
-}
-
-button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
 .filters {
-  padding: 16px;
+  padding: 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -414,58 +377,17 @@ button:disabled {
   width: 150px;
 }
 
-.editor label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.editor input,
-.editor select {
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--text);
-  font: inherit;
-}
-
 .table-card {
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
+  box-shadow: none;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-th,
-td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-}
-
-th {
+.muted {
   color: var(--text-muted);
-  font-weight: 500;
-  white-space: nowrap;
 }
 
-td small {
-  display: block;
+.note {
   color: var(--text-faint);
   font-size: 11px;
-}
-
-.right {
-  text-align: right;
 }
 
 .amount.expense {
@@ -476,94 +398,13 @@ td small {
   color: var(--success);
 }
 
-.muted {
-  color: var(--text-muted);
-}
-
-.tag {
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  background: var(--surface-2);
-}
-
-.tag.income {
-  color: var(--success);
-}
-
-.tag.expense {
-  color: var(--danger);
-}
-
-.actions-cell {
-  white-space: nowrap;
-}
-
-button.link {
-  padding: 4px 8px;
-  border: 0;
-  background: transparent;
-  color: var(--primary);
-}
-
-button.link.danger {
-  color: var(--danger);
-}
-
-.empty {
-  padding: 40px;
-  text-align: center;
-  color: var(--text-faint);
-}
-
 .pager {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.pager div {
-  display: flex;
-  gap: 8px;
-}
-
-.error {
-  margin: 0;
-  color: var(--danger);
-  font-size: 12px;
-}
-
-.overlay {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 20;
-}
-
-.editor {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 380px;
-  padding: 24px;
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.editor h2 {
-  margin: 0 0 4px;
-  font-size: 18px;
-}
-
-.editor-actions {
-  display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
+  padding-top: 14px;
+}
+
+.full-width {
+  width: 100%;
 }
 </style>

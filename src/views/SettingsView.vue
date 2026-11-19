@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { ElMessageBox } from "element-plus";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { api } from "@/api/tauri";
 import { useAppInfo } from "@/composables/useAppInfo";
@@ -10,6 +11,7 @@ const { version, dataDir } = useAppInfo();
 const { mode, setMode } = useTheme();
 const overview = ref<DataOverview | null>(null);
 const message = ref("");
+const messageType = ref<"success" | "error">("success");
 const busy = ref(false);
 
 const themeOptions: { value: ThemeMode; label: string }[] = [
@@ -22,11 +24,16 @@ function describe(value: unknown): string {
   return value instanceof Error ? value.message : String(value);
 }
 
+function notify(text: string, type: "success" | "error" = "success") {
+  message.value = text;
+  messageType.value = type;
+}
+
 async function load() {
   try {
     overview.value = await api.dataOverview();
   } catch (cause) {
-    message.value = describe(cause);
+    notify(describe(cause), "error");
   }
 }
 
@@ -40,9 +47,9 @@ async function backup() {
     });
     if (!path) return;
     await api.backupDatabase(path);
-    message.value = "备份已保存。";
+    notify("备份已保存。");
   } catch (cause) {
-    message.value = describe(cause);
+    notify(describe(cause), "error");
   } finally {
     busy.value = false;
   }
@@ -56,12 +63,18 @@ async function restore() {
       filters: [{ name: "SQLite 数据库", extensions: ["sqlite3", "db"] }],
     });
     if (typeof path !== "string") return;
-    if (!window.confirm("恢复备份会覆盖当前全部数据，确定继续吗？")) return;
+    try {
+      await ElMessageBox.confirm("恢复备份会覆盖当前全部数据，确定继续吗？", "恢复确认", {
+        type: "warning",
+      });
+    } catch {
+      return;
+    }
     await api.restoreDatabase(path);
-    message.value = "恢复完成，数据已重新载入。";
+    notify("恢复完成，数据已重新载入。");
     await load();
   } catch (cause) {
-    message.value = describe(cause);
+    notify(describe(cause), "error");
   } finally {
     busy.value = false;
   }
@@ -77,9 +90,9 @@ async function exportCsv() {
     });
     if (!path) return;
     const count = await api.exportTransactionsCsv(path);
-    message.value = `已导出 ${count} 条交易。`;
+    notify(`已导出 ${count} 条交易。`);
   } catch (cause) {
-    message.value = describe(cause);
+    notify(describe(cause), "error");
   } finally {
     busy.value = false;
   }
@@ -95,46 +108,52 @@ onMounted(load);
       <p>所有数据都在本机，备份与导出由你完全掌控。</p>
     </header>
 
-    <p v-if="message" class="message">{{ message }}</p>
+    <el-alert
+      v-if="message"
+      :type="messageType"
+      :closable="false"
+      show-icon
+      :title="message"
+    />
 
-    <section class="card">
-      <h2>数据管理</h2>
+    <el-card shadow="never" class="page-card">
+      <template #header>数据管理</template>
       <div class="actions">
-        <button type="button" :disabled="busy" @click="backup">备份数据库</button>
-        <button type="button" :disabled="busy" @click="restore">从备份恢复</button>
-        <button type="button" :disabled="busy" @click="exportCsv">导出流水 CSV</button>
+        <el-button :loading="busy" @click="backup">备份数据库</el-button>
+        <el-button :loading="busy" @click="restore">从备份恢复</el-button>
+        <el-button :loading="busy" @click="exportCsv">导出流水 CSV</el-button>
       </div>
       <p class="hint">恢复会覆盖当前数据；建议先做一次备份。导出为 UTF-8 BOM 编码，可直接用 Excel 打开。</p>
-      <dl>
-        <div><dt>数据库位置</dt><dd class="path">{{ overview?.database_path ?? "—" }}</dd></div>
-        <div><dt>当前设备</dt><dd>{{ overview?.device_name ?? "—" }}</dd></div>
-        <div><dt>设备 ID</dt><dd class="path">{{ overview?.device_id ?? "—" }}</dd></div>
-      </dl>
-    </section>
+      <el-descriptions :column="1" size="small" class="info">
+        <el-descriptions-item label="数据库位置">
+          <span class="path">{{ overview?.database_path ?? "—" }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="当前设备">{{ overview?.device_name ?? "—" }}</el-descriptions-item>
+        <el-descriptions-item label="设备 ID">
+          <span class="path">{{ overview?.device_id ?? "—" }}</span>
+        </el-descriptions-item>
+      </el-descriptions>
+    </el-card>
 
-    <section class="card">
-      <h2>外观</h2>
-      <div class="theme-options">
-        <button
-          v-for="option in themeOptions"
-          :key="option.value"
-          type="button"
-          :class="{ selected: mode === option.value }"
-          @click="setMode(option.value)"
-        >
+    <el-card shadow="never" class="page-card">
+      <template #header>外观</template>
+      <el-radio-group :model-value="mode" @update:model-value="setMode($event as ThemeMode)">
+        <el-radio-button v-for="option in themeOptions" :key="option.value" :value="option.value">
           {{ option.label }}
-        </button>
-      </div>
-    </section>
+        </el-radio-button>
+      </el-radio-group>
+    </el-card>
 
-    <section class="card">
-      <h2>关于</h2>
-      <dl>
-        <div><dt>应用</dt><dd>净账 LocalLedger</dd></div>
-        <div><dt>版本</dt><dd>v{{ version }}</dd></div>
-        <div><dt>数据目录</dt><dd class="path">{{ dataDir }}</dd></div>
-      </dl>
-    </section>
+    <el-card shadow="never" class="page-card">
+      <template #header>关于</template>
+      <el-descriptions :column="1" size="small">
+        <el-descriptions-item label="应用">净账 LocalLedger</el-descriptions-item>
+        <el-descriptions-item label="版本">v{{ version }}</el-descriptions-item>
+        <el-descriptions-item label="数据目录">
+          <span class="path">{{ dataDir }}</span>
+        </el-descriptions-item>
+      </el-descriptions>
+    </el-card>
   </div>
 </template>
 
@@ -142,8 +161,8 @@ onMounted(load);
 .settings {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  max-width: 820px;
+  gap: 16px;
+  max-width: 860px;
   margin: 0 auto;
 }
 
@@ -157,57 +176,10 @@ onMounted(load);
   color: var(--text-muted);
 }
 
-.card {
-  padding: 20px 24px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.card h2 {
-  margin: 0 0 16px;
-  font-size: 16px;
-}
-
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-}
-
-button {
-  padding: 8px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text);
-  font: inherit;
-}
-
-button:hover:not(:disabled) {
-  background: var(--surface-hover);
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.theme-options {
-  display: flex;
-  gap: 8px;
-}
-
-button.selected {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.message {
-  margin: 0;
-  color: var(--success);
-  font-size: 13px;
 }
 
 .hint {
@@ -216,30 +188,13 @@ button.selected {
   font-size: 12px;
 }
 
-dl {
-  margin: 18px 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.info {
+  margin-top: 18px;
 }
 
-dl > div {
-  display: grid;
-  grid-template-columns: 100px 1fr;
-  gap: 12px;
-}
-
-dt {
-  color: var(--text-muted);
-}
-
-dd {
-  margin: 0;
-  word-break: break-all;
-}
-
-dd.path {
+.path {
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   font-size: 11px;
+  word-break: break-all;
 }
 </style>

@@ -1,7 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import { ElMessageBox } from "element-plus";
 import { api } from "@/api/tauri";
 import type { Category, CategoryRule } from "@/types/domain";
+
+interface CategoryNode {
+  id: string;
+  name: string;
+  icon: string;
+  sort_order: number;
+  children: CategoryNode[];
+}
 
 const categories = ref<Category[]>([]);
 const rules = ref<CategoryRule[]>([]);
@@ -23,22 +32,37 @@ const matchFields = [
 
 const categoryById = computed(() => new Map(categories.value.map((item) => [item.id, item])));
 
+const treeData = computed<CategoryNode[]>(() => {
+  const nodes = new Map<string, CategoryNode>();
+  for (const item of categories.value) {
+    nodes.set(item.id, {
+      id: item.id,
+      name: item.name,
+      icon: item.icon || "▫",
+      sort_order: item.sort_order,
+      children: [],
+    });
+  }
+  const roots: CategoryNode[] = [];
+  for (const item of categories.value) {
+    const node = nodes.get(item.id)!;
+    const parent = item.parent_id ? nodes.get(item.parent_id) : undefined;
+    if (parent && parent !== node) parent.children.push(node);
+    else roots.push(node);
+  }
+  return roots;
+});
+
 function describe(value: unknown): string {
   return value instanceof Error ? value.message : String(value);
 }
 
-function depth(category: Category): number {
-  let level = 0;
-  let parent = category.parent_id;
-  while (parent && level < 8) {
-    level += 1;
-    parent = categoryById.value.get(parent)?.parent_id ?? null;
-  }
-  return level;
-}
-
 function categoryName(id: string): string {
   return categoryById.value.get(id)?.name ?? id;
+}
+
+function matchFieldLabel(value: string): string {
+  return matchFields.find((field) => field.value === value)?.label ?? value;
 }
 
 async function load() {
@@ -76,11 +100,8 @@ async function saveCategory() {
     sort_order: Number(categoryForm.sort_order),
   };
   try {
-    if (categoryId.value) {
-      await api.updateCategory(categoryId.value, input);
-    } else {
-      await api.createCategory(input);
-    }
+    if (categoryId.value) await api.updateCategory(categoryId.value, input);
+    else await api.createCategory(input);
     showCategoryEditor.value = false;
     await load();
   } catch (cause) {
@@ -89,12 +110,14 @@ async function saveCategory() {
 }
 
 async function removeCategory(category: Category) {
-  if (!window.confirm(`删除分类「${category.name}」？该操作为软删除。`)) return;
   try {
+    await ElMessageBox.confirm(`删除分类「${category.name}」？该操作为软删除。`, "删除确认", {
+      type: "warning",
+    });
     await api.deleteCategory(category.id);
     await load();
   } catch (cause) {
-    error.value = describe(cause);
+    if (cause !== "cancel" && cause !== "close") error.value = describe(cause);
   }
 }
 
@@ -121,11 +144,8 @@ async function saveRule() {
     priority: Number(ruleForm.priority),
   };
   try {
-    if (ruleId.value) {
-      await api.updateRule(ruleId.value, input);
-    } else {
-      await api.createRule(input);
-    }
+    if (ruleId.value) await api.updateRule(ruleId.value, input);
+    else await api.createRule(input);
     showRuleEditor.value = false;
     await load();
   } catch (cause) {
@@ -134,12 +154,12 @@ async function saveRule() {
 }
 
 async function removeRule(rule: CategoryRule) {
-  if (!window.confirm(`删除规则「${rule.keyword}」？`)) return;
   try {
+    await ElMessageBox.confirm(`删除规则「${rule.keyword}」？`, "删除确认", { type: "warning" });
     await api.deleteRule(rule.id);
     await load();
   } catch (cause) {
-    error.value = describe(cause);
+    if (cause !== "cancel" && cause !== "close") error.value = describe(cause);
   }
 }
 
@@ -149,107 +169,130 @@ onMounted(load);
 <template>
   <div class="categories">
     <header class="hero">
-      <div>
-        <h1>分类管理</h1>
-        <p>分类支持层级；自动分类规则按优先级匹配，导入账单时自动套用。</p>
-      </div>
+      <h1>分类管理</h1>
+      <p>分类支持层级；自动分类规则按优先级匹配，导入账单时自动套用。</p>
     </header>
 
-    <p v-if="error" class="error">{{ error }}</p>
+    <el-alert v-if="error" type="error" :closable="false" show-icon :title="error" />
 
-    <div class="grid">
-      <section class="card">
-        <div class="card-head">
-          <h2>分类</h2>
-          <button type="button" class="primary" @click="openCategory()">＋ 新建</button>
-        </div>
-        <ul class="tree">
-          <li v-for="item in categories" :key="item.id" :style="{ paddingLeft: `${depth(item) * 20}px` }">
-            <span class="icon">{{ item.icon || "▫" }}</span>
-            <span class="name">{{ item.name }}</span>
-            <span class="order">#{{ item.sort_order }}</span>
-            <button type="button" class="link" @click="openCategory(item)">编辑</button>
-            <button type="button" class="link danger" @click="removeCategory(item)">删除</button>
-          </li>
-        </ul>
-      </section>
+    <el-row :gutter="18">
+      <el-col :xs="24" :md="10">
+        <el-card shadow="never" class="page-card">
+          <template #header>
+            <div class="card-head">
+              <span>分类</span>
+              <el-button type="primary" size="small" @click="openCategory()">＋ 新建</el-button>
+            </div>
+          </template>
+          <el-tree :data="treeData" node-key="id" default-expand-all :expand-on-click-node="false">
+            <template #default="{ data }">
+              <div class="tree-node">
+                <span class="icon">{{ data.icon }}</span>
+                <span class="name">{{ data.name }}</span>
+                <span class="order">#{{ data.sort_order }}</span>
+                <el-button link type="primary" size="small" @click="openCategory(categoryById.get(data.id))">
+                  编辑
+                </el-button>
+                <el-button link type="danger" size="small" @click="removeCategory(categoryById.get(data.id)!)">
+                  删除
+                </el-button>
+              </div>
+            </template>
+          </el-tree>
+        </el-card>
+      </el-col>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>自动分类规则</h2>
-          <button type="button" class="primary" @click="openRule()">＋ 新建规则</button>
-        </div>
-        <table>
-          <thead><tr><th>关键词</th><th>匹配字段</th><th>目标分类</th><th>优先级</th><th></th></tr></thead>
-          <tbody>
-            <tr v-for="rule in rules" :key="rule.id">
-              <td><strong>{{ rule.keyword }}</strong></td>
-              <td>{{ matchFields.find((field) => field.value === rule.match_field)?.label ?? rule.match_field }}</td>
-              <td>{{ categoryName(rule.category_id) }}</td>
-              <td>{{ rule.priority }}</td>
-              <td class="row-actions">
-                <button type="button" class="link" @click="openRule(rule)">编辑</button>
-                <button type="button" class="link danger" @click="removeRule(rule)">删除</button>
-              </td>
-            </tr>
-            <tr v-if="!rules.length"><td colspan="5" class="empty">暂无规则</td></tr>
-          </tbody>
-        </table>
-      </section>
-    </div>
+      <el-col :xs="24" :md="14">
+        <el-card shadow="never" class="page-card">
+          <template #header>
+            <div class="card-head">
+              <span>自动分类规则</span>
+              <el-button type="primary" size="small" @click="openRule()">＋ 新建规则</el-button>
+            </div>
+          </template>
+          <el-table :data="rules" size="small" empty-text="暂无规则">
+            <el-table-column label="关键词" min-width="100">
+              <template #default="{ row }"><strong>{{ row.keyword }}</strong></template>
+            </el-table-column>
+            <el-table-column label="匹配字段" min-width="110">
+              <template #default="{ row }">{{ matchFieldLabel(row.match_field) }}</template>
+            </el-table-column>
+            <el-table-column label="目标分类" min-width="100">
+              <template #default="{ row }">{{ categoryName(row.category_id) }}</template>
+            </el-table-column>
+            <el-table-column prop="priority" label="优先级" width="80" />
+            <el-table-column label="操作" width="110" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="openRule(row as CategoryRule)">编辑</el-button>
+                <el-button link type="danger" size="small" @click="removeRule(row as CategoryRule)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-col>
+    </el-row>
 
-    <div v-if="showCategoryEditor" class="overlay" @click.self="showCategoryEditor = false">
-      <form class="editor" @submit.prevent="saveCategory">
-        <h2>{{ categoryId ? "编辑分类" : "新建分类" }}</h2>
-        <label>名称<input v-model="categoryForm.name" type="text" /></label>
-        <label>父分类
-          <select v-model="categoryForm.parent_id">
-            <option value="">无（顶级）</option>
-            <option v-for="item in categories" :key="item.id" :value="item.id">{{ item.name }}</option>
-          </select>
-        </label>
-        <label>图标<input v-model="categoryForm.icon" type="text" placeholder=" emoji 或符号" /></label>
-        <label>颜色<input v-model="categoryForm.color" type="text" placeholder="#2563eb" /></label>
-        <label>排序<input v-model.number="categoryForm.sort_order" type="number" /></label>
-        <div class="editor-actions">
-          <button type="button" class="ghost" @click="showCategoryEditor = false">取消</button>
-          <button type="submit" class="primary">保存</button>
-        </div>
-      </form>
-    </div>
+    <el-dialog v-model="showCategoryEditor" :title="categoryId ? '编辑分类' : '新建分类'" width="420px" :close-on-click-modal="false">
+      <el-form label-position="top">
+        <el-form-item label="名称">
+          <el-input v-model="categoryForm.name" />
+        </el-form-item>
+        <el-form-item label="父分类">
+          <el-select v-model="categoryForm.parent_id" class="full-width">
+            <el-option label="无（顶级）" value="" />
+            <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="图标">
+          <el-input v-model="categoryForm.icon" placeholder="emoji 或符号" />
+        </el-form-item>
+        <el-form-item label="颜色">
+          <el-input v-model="categoryForm.color" placeholder="#2563eb" />
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="categoryForm.sort_order" :min="0" class="full-width" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showCategoryEditor = false">取消</el-button>
+        <el-button type="primary" @click="saveCategory">保存</el-button>
+      </template>
+    </el-dialog>
 
-    <div v-if="showRuleEditor" class="overlay" @click.self="showRuleEditor = false">
-      <form class="editor" @submit.prevent="saveRule">
-        <h2>{{ ruleId ? "编辑规则" : "新建规则" }}</h2>
-        <label>关键词<input v-model="ruleForm.keyword" type="text" placeholder="包含此文字即命中" /></label>
-        <label>匹配字段
-          <select v-model="ruleForm.match_field">
-            <option v-for="field in matchFields" :key="field.value" :value="field.value">{{ field.label }}</option>
-          </select>
-        </label>
-        <label>目标分类
-          <select v-model="ruleForm.category_id">
-            <option v-for="item in categories" :key="item.id" :value="item.id">{{ item.name }}</option>
-          </select>
-        </label>
-        <label>优先级<input v-model.number="ruleForm.priority" type="number" /></label>
-        <p class="hint">数值越大越先匹配。</p>
-        <div class="editor-actions">
-          <button type="button" class="ghost" @click="showRuleEditor = false">取消</button>
-          <button type="submit" class="primary">保存</button>
-        </div>
-      </form>
-    </div>
+    <el-dialog v-model="showRuleEditor" :title="ruleId ? '编辑规则' : '新建规则'" width="420px" :close-on-click-modal="false">
+      <el-form label-position="top">
+        <el-form-item label="关键词">
+          <el-input v-model="ruleForm.keyword" placeholder="包含此文字即命中" />
+        </el-form-item>
+        <el-form-item label="匹配字段">
+          <el-select v-model="ruleForm.match_field" class="full-width">
+            <el-option v-for="field in matchFields" :key="field.value" :label="field.label" :value="field.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="目标分类">
+          <el-select v-model="ruleForm.category_id" class="full-width">
+            <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="优先级">
+          <el-input-number v-model="ruleForm.priority" class="full-width" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showRuleEditor = false">取消</el-button>
+        <el-button type="primary" @click="saveRule">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <style scoped>
 .categories {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
 .hero h1 {
@@ -262,76 +305,23 @@ onMounted(load);
   color: var(--text-muted);
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(420px, 1.4fr);
-  gap: 18px;
-}
-
-.card {
-  padding: 20px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  min-width: 0;
+.page-card {
+  height: 100%;
 }
 
 .card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
+  gap: 10px;
 }
 
-.card h2 {
-  margin: 0;
-  font-size: 16px;
-}
-
-button {
-  padding: 6px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-}
-
-button.primary {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: #fff;
-}
-
-button.ghost:hover,
-button.link:hover {
-  background: var(--surface-hover);
-}
-
-button.link {
-  padding: 3px 6px;
-  border: 0;
-  background: transparent;
-  color: var(--primary);
-}
-
-button.link.danger {
-  color: var(--danger);
-}
-
-.tree {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.tree li {
+.tree-node {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border);
+  flex: 1;
+  min-width: 0;
 }
 
 .icon {
@@ -341,6 +331,10 @@ button.link.danger {
 
 .name {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .order {
@@ -348,93 +342,7 @@ button.link.danger {
   font-size: 11px;
 }
 
-table {
+.full-width {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-th,
-td {
-  padding: 8px 6px;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-}
-
-th {
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.row-actions {
-  white-space: nowrap;
-}
-
-.empty {
-  padding: 24px;
-  text-align: center;
-  color: var(--text-faint);
-}
-
-.error {
-  margin: 0;
-  color: var(--danger);
-  font-size: 12px;
-}
-
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-input,
-select {
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--text);
-  font: inherit;
-}
-
-.overlay {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 20;
-}
-
-.editor {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 380px;
-  padding: 24px;
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.editor h2 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.hint {
-  margin: 0;
-  color: var(--text-faint);
-  font-size: 11px;
-}
-
-.editor-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
 }
 </style>

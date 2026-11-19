@@ -7,7 +7,6 @@ import { CanvasRenderer } from "echarts/renderers";
 import type { EChartsType } from "echarts/core";
 import { api } from "@/api/tauri";
 import { useTheme } from "@/composables/useTheme";
-import { formatAmount } from "@/types/domain";
 import type { CategorySlice, DailyPoint, MonthSummary } from "@/types/domain";
 
 echarts.use([
@@ -215,53 +214,66 @@ onUnmounted(() => {
         <h1>统计</h1>
         <p>月度收支、分类占比与每日趋势；口径与流水一致（仅统计未删除记录）。</p>
       </div>
-      <select v-model.number="months" @change="load">
-        <option v-for="option in monthOptions" :key="option.value" :value="option.value">
-          {{ option.label }}
-        </option>
-      </select>
+      <el-select v-model="months" class="range-select" @change="load">
+        <el-option v-for="option in monthOptions" :key="option.value" :label="option.label" :value="option.value" />
+      </el-select>
     </header>
 
-    <p v-if="error" class="error">{{ error }}</p>
+    <el-alert v-if="error" type="error" :closable="false" show-icon :title="error" />
 
-    <div class="summary">
-      <div><span>区间总收入</span><strong class="income">¥{{ formatAmount(totalIncome()) }}</strong></div>
-      <div><span>区间总支出</span><strong class="expense">¥{{ formatAmount(totalExpense()) }}</strong></div>
-      <div>
-        <span>净结余</span>
-        <strong>¥{{ formatAmount(totalIncome() - totalExpense()) }}</strong>
-      </div>
-    </div>
+    <el-row :gutter="14" class="summary">
+      <el-col :xs="24" :sm="8">
+        <el-card shadow="never">
+          <el-statistic title="区间总收入" :value="totalIncome() / 100" :precision="2" prefix="¥" />
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :sm="8">
+        <el-card shadow="never">
+          <el-statistic title="区间总支出" :value="totalExpense() / 100" :precision="2" prefix="¥" />
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :sm="8">
+        <el-card shadow="never">
+          <el-statistic title="净结余" :value="(totalIncome() - totalExpense()) / 100" :precision="2" prefix="¥" />
+        </el-card>
+      </el-col>
+    </el-row>
 
-    <section class="card">
-      <h2>月度收支</h2>
+    <el-card shadow="never" class="page-card">
+      <template #header>月度收支</template>
       <div v-if="summaries.length" ref="barEl" class="chart bar"></div>
-      <p v-else class="empty">暂无交易数据，导入账单后再来看趋势吧。</p>
-    </section>
+      <el-empty v-else description="暂无交易数据，导入账单后再来看趋势吧。" />
+    </el-card>
 
-    <div class="grid">
-      <section class="card">
-        <div class="card-head">
-          <h2>分类占比</h2>
-          <div class="controls">
-            <select v-model="selectedMonth" @change="loadMonth">
-              <option v-for="item in summaries" :key="item.month" :value="item.month">{{ item.month }}</option>
-            </select>
-            <select v-model="breakdownKind" @change="loadMonth">
-              <option v-for="option in kindOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-            </select>
-          </div>
-        </div>
-        <div v-if="slices.length" ref="pieEl" class="chart pie"></div>
-        <p v-else class="empty">该月暂无{{ breakdownKind === 'expense' ? '支出' : '收入' }}数据。</p>
-      </section>
+    <el-row :gutter="18">
+      <el-col :xs="24" :md="12">
+        <el-card shadow="never" class="page-card">
+          <template #header>
+            <div class="card-head">
+              <span>分类占比</span>
+              <div class="controls">
+                <el-select v-model="selectedMonth" class="month-select" @change="loadMonth">
+                  <el-option v-for="item in summaries" :key="item.month" :label="item.month" :value="item.month" />
+                </el-select>
+                <el-select v-model="breakdownKind" class="kind-select" @change="loadMonth">
+                  <el-option v-for="option in kindOptions" :key="option.value" :label="option.label" :value="option.value" />
+                </el-select>
+              </div>
+            </div>
+          </template>
+          <div v-if="slices.length" ref="pieEl" class="chart pie"></div>
+          <el-empty v-else :description="`该月暂无${breakdownKind === 'expense' ? '支出' : '收入'}数据。`" />
+        </el-card>
+      </el-col>
 
-      <section class="card">
-        <h2>每日趋势 · {{ selectedMonth }}</h2>
-        <div v-if="trend.length" ref="lineEl" class="chart line"></div>
-        <p v-else class="empty">该月暂无交易数据。</p>
-      </section>
-    </div>
+      <el-col :xs="24" :md="12">
+        <el-card shadow="never" class="page-card">
+          <template #header>每日趋势 · {{ selectedMonth }}</template>
+          <div v-if="trend.length" ref="lineEl" class="chart line"></div>
+          <el-empty v-else description="该月暂无交易数据。" />
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -269,8 +281,8 @@ onUnmounted(() => {
 .stats {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  max-width: 1200px;
+  gap: 16px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 
@@ -291,60 +303,12 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
-select {
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
+.range-select {
+  width: 200px;
 }
 
-.summary {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-}
-
-.summary div {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 16px 20px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-.summary span {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.summary strong {
-  font-size: 20px;
-}
-
-.income {
-  color: var(--success);
-}
-
-.expense {
-  color: var(--danger);
-}
-
-.card {
-  padding: 18px 20px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow);
+.page-card {
   min-width: 0;
-}
-
-.card h2 {
-  margin: 0 0 12px;
-  font-size: 15px;
 }
 
 .card-head {
@@ -359,10 +323,12 @@ select {
   gap: 8px;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
+.month-select {
+  width: 110px;
+}
+
+.kind-select {
+  width: 90px;
 }
 
 .chart {
@@ -376,20 +342,5 @@ select {
 .chart.pie,
 .chart.line {
   height: 300px;
-}
-
-.empty {
-  display: grid;
-  place-items: center;
-  height: 240px;
-  margin: 0;
-  color: var(--text-faint);
-  font-size: 12px;
-}
-
-.error {
-  margin: 0;
-  color: var(--danger);
-  font-size: 12px;
 }
 </style>

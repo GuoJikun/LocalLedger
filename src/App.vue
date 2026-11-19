@@ -1,16 +1,12 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
-import { RouterLink, RouterView } from "vue-router";
+import { computed, onMounted, onUnmounted, ref } from "vue";
+import { RouterView, useRoute } from "vue-router";
 import { ElButton, ElIcon } from "element-plus";
-import {
-  Close,
-  CopyDocument,
-  FullScreen,
-  Minus,
-} from "@element-plus/icons-vue";
+import { Close, CopyDocument, FullScreen, Minus } from "@element-plus/icons-vue";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+const route = useRoute();
 const inTauri = isTauri();
 const maximized = ref(false);
 
@@ -22,6 +18,8 @@ const navItems = [
   { to: "/statistics", icon: "◔", label: "统计" },
   { to: "/settings", icon: "⚙", label: "设置" },
 ];
+
+const activePath = computed(() => route.path);
 
 async function syncMaximized() {
   if (!inTauri) return;
@@ -69,26 +67,25 @@ onUnmounted(() => window.removeEventListener("resize", syncMaximized));
   <div class="shell">
     <aside class="sidebar">
       <div class="brand" data-tauri-drag-region>
-        <span class="brand-mark">净</span>
+        <div class="brand-mark">净</div>
         <div>
           <strong>净账</strong>
           <small>LocalLedger</small>
         </div>
       </div>
 
-      <nav>
-        <RouterLink
-          v-for="item in navItems"
-          :key="item.to"
-          :to="item.to"
-          class="nav-item"
-          active-class="active"
-          exact-active-class="active"
-        >
+      <el-menu
+        :default-active="activePath"
+        :default-openeds="[]"
+        router
+        class="side-menu"
+        :ellipsis="false"
+      >
+        <el-menu-item v-for="item in navItems" :key="item.to" :index="item.to">
           <span class="nav-icon">{{ item.icon }}</span>
           <span>{{ item.label }}</span>
-        </RouterLink>
-      </nav>
+        </el-menu-item>
+      </el-menu>
 
       <div class="sidebar-footer">
         <span class="dot"></span>
@@ -99,7 +96,6 @@ onUnmounted(() => window.removeEventListener("resize", syncMaximized));
     <div class="main">
       <header class="topbar">
         <div class="drag-area" data-tauri-drag-region @dblclick="toggleMaximize"></div>
-
         <div v-if="inTauri" class="window-controls">
           <ElButton class="win-btn" text circle title="最小化" @click="minimize">
             <ElIcon><Minus /></ElIcon>
@@ -137,7 +133,7 @@ onUnmounted(() => window.removeEventListener("resize", syncMaximized));
   flex-direction: column;
   width: 220px;
   flex-shrink: 0;
-  padding: 20px 14px;
+  padding: 16px 10px;
   background: var(--surface);
   border-right: 1px solid var(--border);
 }
@@ -146,7 +142,7 @@ onUnmounted(() => window.removeEventListener("resize", syncMaximized));
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 4px 8px 24px;
+  padding: 4px 8px 18px;
   user-select: none;
 }
 
@@ -174,37 +170,28 @@ onUnmounted(() => window.removeEventListener("resize", syncMaximized));
   font-size: 11px;
 }
 
-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.side-menu {
+  border: 0;
+  background: transparent;
 }
 
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+.side-menu :deep(.el-menu-item) {
+  height: 42px;
+  line-height: 42px;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  transition: background 0.15s, color 0.15s;
 }
 
-.nav-item:hover {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-.nav-item.active {
-  background: var(--primary-soft);
+.side-menu :deep(.el-menu-item.is-active) {
   color: var(--primary);
+  background: var(--primary-soft);
   font-weight: 600;
 }
 
 .nav-icon {
   width: 20px;
   text-align: center;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .sidebar-footer {
@@ -234,22 +221,16 @@ nav {
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   height: 40px;
   flex-shrink: 0;
-  padding-left: 16px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   user-select: none;
 }
 
 .drag-area {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   flex: 1;
   height: 100%;
-  min-width: 0;
 }
 
 .window-controls {

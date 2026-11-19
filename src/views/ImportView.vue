@@ -92,68 +92,88 @@ async function runImport() {
     </div>
 
     <div class="actions">
-      <button type="button" class="secondary" @click="chooseFile">选择文件</button>
-      <button type="button" :disabled="!selectedPath || importing" @click="runImport">
-        {{ importing ? "导入中…" : "开始导入" }}
-      </button>
-      <span v-if="message" class="message">{{ message }}</span>
+      <el-button @click="chooseFile">选择文件</el-button>
+      <el-button type="primary" :loading="importing" :disabled="!selectedPath" @click="runImport">
+        开始导入
+      </el-button>
     </div>
 
-    <section v-if="result" class="result">
-      <h2>导入结果 · {{ result.platform }}</h2>
-      <div class="stats">
-        <div><strong>{{ result.imported }}</strong><span>成功</span></div>
-        <div><strong>{{ result.duplicates }}</strong><span>重复</span></div>
-        <div><strong>{{ result.skipped }}</strong><span>跳过</span></div>
-        <div><strong>{{ result.classified }}</strong><span>自动分类</span></div>
-        <div><strong>{{ result.total_rows }}</strong><span>总行数</span></div>
-      </div>
-      <div v-if="result.errors.length" class="errors">
-        <h3>未导入的行</h3>
-        <table>
-          <thead><tr><th>行号</th><th>原因</th></tr></thead>
-          <tbody>
-            <tr v-for="issue in result.errors" :key="issue.line">
-              <td>{{ issue.line }}</td>
-              <td>{{ issue.reason }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p v-else class="all-good">全部行均已处理。</p>
-    </section>
+    <el-alert
+      v-if="message"
+      type="error"
+      :closable="false"
+      show-icon
+      :title="message"
+      class="page-alert"
+    />
 
-    <details class="supported">
-      <summary>当前支持的账单表头（点击展开对照）</summary>
-      <div class="header-grid">
-        <section class="header-card">
-          <div class="header-title">
-            <h3>支付宝</h3>
-            <span>逗号或 Tab 分隔均可；自动跳过说明行</span>
-          </div>
-          <pre>交易时间	交易分类	交易对方	对方账号	商品说明	收/支	金额	 收/付款方式 	交易状态	 交易订单号 	商家订单号	备注</pre>
-          <p class="header-note">也兼容旧版列名：交易号 / 交易订单号 / 商家订单号，商品说明 / 商品，收/支 / 收支，金额 / 金额(元)，收/付款方式 / 支付方式，交易状态 / 当前状态。收/支为「不计收支」或交易状态非成功的行会跳过。</p>
-        </section>
-        <section class="header-card">
-          <div class="header-title">
-            <h3>微信</h3>
-            <span>UTF-8 BOM；自动跳过说明行</span>
-          </div>
-          <pre>交易时间,交易类型,交易对方,商品,收/支,金额(元),支付方式,当前状态,交易单号</pre>
-          <p class="header-note">必需列：交易时间 + 交易单号。转账 / 红包按转账处理，退款按收入处理；状态为「已关闭 / 失败」的行会跳过。</p>
-        </section>
-      </div>
-    </details>
+    <el-card v-if="result" shadow="never" class="result-card">
+      <template #header>导入结果 · {{ result.platform }}</template>
+      <el-row :gutter="8" class="stat-row">
+        <el-col :span="4"><el-statistic title="成功" :value="result.imported" /></el-col>
+        <el-col :span="4"><el-statistic title="重复" :value="result.duplicates" /></el-col>
+        <el-col :span="4"><el-statistic title="跳过" :value="result.skipped" /></el-col>
+        <el-col :span="4"><el-statistic title="自动分类" :value="result.classified" /></el-col>
+        <el-col :span="8"><el-statistic title="总行数" :value="result.total_rows" /></el-col>
+      </el-row>
+      <template v-if="result.errors.length">
+        <h3 class="section-title">未导入的行</h3>
+        <el-table :data="result.errors" size="small" max-height="320">
+          <el-table-column prop="line" label="行号" width="80" />
+          <el-table-column prop="reason" label="原因" min-width="200" />
+        </el-table>
+      </template>
+      <el-alert
+        v-else
+        type="success"
+        :closable="false"
+        show-icon
+        title="全部行均已处理"
+      />
+    </el-card>
+
+    <el-collapse class="supported">
+      <el-collapse-item title="当前支持的账单表头（点击展开对照）" name="headers">
+        <el-row :gutter="16">
+          <el-col :xs="24" :md="12">
+            <div class="header-card">
+              <div class="header-title">
+                <h3>支付宝</h3>
+                <span>逗号或 Tab 分隔均可；自动跳过说明行</span>
+              </div>
+              <pre>交易时间	交易分类	交易对方	对方账号	商品说明	收/支	金额	 收/付款方式 	交易状态	 交易订单号 	商家订单号	备注</pre>
+              <p class="header-note">
+                也兼容旧版列名：交易号 / 交易订单号 / 商家订单号，商品说明 / 商品，收/支 / 收支，金额 /
+                金额(元)，收/付款方式 / 支付方式，交易状态 / 当前状态。收/支为「不计收支」或交易状态非成功的行会跳过。
+              </p>
+            </div>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <div class="header-card">
+              <div class="header-title">
+                <h3>微信</h3>
+                <span>UTF-8 BOM；自动跳过说明行</span>
+              </div>
+              <pre>交易时间,交易类型,交易对方,商品,收/支,金额(元),支付方式,当前状态,交易单号</pre>
+              <p class="header-note">
+                必需列：交易时间 + 交易单号。转账 / 红包按转账处理，退款按收入处理；状态为「已关闭 /
+                失败」的行会跳过。
+              </p>
+            </div>
+          </el-col>
+        </el-row>
+      </el-collapse-item>
+    </el-collapse>
   </div>
 </template>
 
 <style scoped>
 .import-page {
-  max-width: 860px;
+  max-width: 980px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
 }
 
 .hero h1 {
@@ -172,7 +192,7 @@ async function runImport() {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 220px;
+  min-height: 200px;
   padding: 32px;
   border: 2px dashed var(--border);
   border-radius: var(--radius);
@@ -212,127 +232,31 @@ async function runImport() {
 
 .actions {
   display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-button {
-  padding: 8px 20px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: var(--primary);
-  color: #fff;
-}
-
-button.secondary {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-}
-
-button:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.message {
-  color: var(--danger);
-  font-size: 12px;
-}
-
-.result {
-  padding: 22px 24px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.result h2 {
-  margin: 0 0 16px;
-  font-size: 16px;
-}
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 10px;
 }
 
-.stats div {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
+.page-alert {
+  margin-bottom: 0;
 }
 
-.stats strong {
-  font-size: 22px;
-  color: var(--primary);
+.result-card {
+  box-shadow: none;
 }
 
-.stats span {
-  color: var(--text-muted);
-  font-size: 12px;
+.stat-row {
+  margin-bottom: 18px;
 }
 
-.errors h3 {
-  margin: 20px 0 8px;
+.section-title {
+  margin: 0 0 10px;
   font-size: 14px;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-th,
-td {
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-}
-
-th {
-  color: var(--text-muted);
-}
-
-.all-good {
-  margin: 18px 0 0;
-  color: var(--success);
-  font-size: 12px;
 }
 
 .supported {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-}
-
-.supported summary {
-  padding: 12px 18px;
-  cursor: pointer;
-  color: var(--text-muted);
-  font-size: 13px;
-  user-select: none;
-}
-
-.supported summary:hover {
-  color: var(--text);
-}
-
-.header-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  padding: 0 18px 18px;
+  overflow: hidden;
 }
 
 .header-card {
@@ -379,11 +303,5 @@ th {
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.7;
-}
-
-@media (max-width: 760px) {
-  .header-grid {
-    grid-template-columns: 1fr;
-  }
 }
 </style>
