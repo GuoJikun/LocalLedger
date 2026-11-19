@@ -5,7 +5,8 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::domain::{
-    Account, Category, CategoryPatch, Device, NewCategory, NewTransaction, SyncChange, Transaction,
+    Account, Category, CategoryPatch, CategoryRule, CategoryRulePatch, Device, NewCategory,
+    NewCategoryRule, NewTransaction, SyncChange, Transaction, TransactionFilter, TransactionPage,
     TransactionPatch, TransactionSource,
 };
 use crate::error::AppError;
@@ -14,8 +15,8 @@ use crate::importer::{
     service::{self, ImportSummary},
 };
 use crate::repository::{
-    AccountRepository, CategoryRepository, SqliteRepository, SyncChangeRepository,
-    TransactionRepository,
+    AccountRepository, CategoryRepository, CategoryRuleRepository, SqliteRepository,
+    SyncChangeRepository, TransactionRepository,
 };
 use crate::state::AppState;
 
@@ -77,6 +78,17 @@ pub fn list_transactions(state: State<'_, AppState>) -> Result<Vec<Transaction>,
     let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
     repo(&conn, &state)
         .list_transactions(false)
+        .map_err(String::from)
+}
+
+#[tauri::command]
+pub fn search_transactions(
+    filter: TransactionFilter,
+    state: State<'_, AppState>,
+) -> Result<TransactionPage, String> {
+    let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
+    repo(&conn, &state)
+        .search_transactions(&filter)
         .map_err(String::from)
 }
 
@@ -181,6 +193,43 @@ pub fn delete_category(id: String, state: State<'_, AppState>) -> Result<bool, S
     let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
     repo(&conn, &state)
         .soft_delete_category(&id)
+        .map_err(String::from)
+}
+
+#[tauri::command]
+pub fn list_rules(state: State<'_, AppState>) -> Result<Vec<CategoryRule>, String> {
+    let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
+    repo(&conn, &state).list_rules().map_err(String::from)
+}
+
+#[tauri::command]
+pub fn create_rule(
+    input: NewCategoryRule,
+    state: State<'_, AppState>,
+) -> Result<CategoryRule, String> {
+    let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
+    repo(&conn, &state)
+        .insert_rule(&input)
+        .map_err(String::from)
+}
+
+#[tauri::command]
+pub fn update_rule(
+    id: String,
+    patch: CategoryRulePatch,
+    state: State<'_, AppState>,
+) -> Result<Option<CategoryRule>, String> {
+    let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
+    repo(&conn, &state)
+        .update_rule(&id, &patch)
+        .map_err(String::from)
+}
+
+#[tauri::command]
+pub fn delete_rule(id: String, state: State<'_, AppState>) -> Result<bool, String> {
+    let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
+    repo(&conn, &state)
+        .soft_delete_rule(&id)
         .map_err(String::from)
 }
 

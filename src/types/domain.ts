@@ -87,6 +87,63 @@ export interface DataOverview {
   pending_changes: number;
 }
 
+export interface TransactionFilter {
+  keyword?: string;
+  kind?: TransactionKind;
+  category_id?: string;
+  from?: string;
+  to?: string;
+  min_amount?: number;
+  max_amount?: number;
+  offset: number;
+  limit: number;
+}
+
+export interface TransactionPage {
+  items: Transaction[];
+  total: number;
+}
+
+export interface TransactionPatch {
+  account_id?: string;
+  kind?: TransactionKind;
+  amount?: number;
+  counterparty?: string | null;
+  category_id?: string | null;
+  note?: string | null;
+  happened_at?: string;
+  payment_method?: string | null;
+  status?: string | null;
+  raw_data?: string | null;
+}
+
+export interface CategoryRule {
+  id: string;
+  keyword: string;
+  match_field: string;
+  category_id: string;
+  priority: number;
+  created_at: string;
+  updated_at: string;
+  device_id: string;
+  version: number;
+  deleted: boolean;
+}
+
+export interface NewCategoryRule {
+  keyword: string;
+  match_field: string;
+  category_id: string;
+  priority: number;
+}
+
+export interface CategoryRulePatch {
+  keyword?: string;
+  match_field?: string;
+  category_id?: string;
+  priority?: number;
+}
+
 export interface RowIssue {
   line: number;
   reason: string;

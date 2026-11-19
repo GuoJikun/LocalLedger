@@ -187,6 +187,44 @@ impl Default for NewTransaction {
     }
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct TransactionFilter {
+    pub keyword: Option<String>,
+    pub kind: Option<TransactionKind>,
+    pub category_id: Option<String>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub min_amount: Option<i64>,
+    pub max_amount: Option<i64>,
+    pub offset: i64,
+    pub limit: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TransactionPage {
+    pub items: Vec<Transaction>,
+    pub total: i64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct NewCategoryRule {
+    pub keyword: String,
+    pub match_field: String,
+    pub category_id: String,
+    pub priority: i64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct CategoryRulePatch {
+    pub keyword: Option<String>,
+    pub match_field: Option<String>,
+    pub category_id: Option<String>,
+    pub priority: Option<i64>,
+}
+
 /// `Option<Option<T>>`：字段缺省表示「不修改」，显式 `null` 表示「清空」。
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]

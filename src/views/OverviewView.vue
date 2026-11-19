@@ -28,7 +28,7 @@ const milestones = [
   { code: "M0", title: "脚手架", status: "已完成" },
   { code: "M1", title: "数据底座", status: "已完成" },
   { code: "M2", title: "账单导入", status: "已完成" },
-  { code: "M3", title: "流水与分类", status: "待开始" },
+  { code: "M3", title: "流水与分类", status: "已完成" },
   { code: "M4", title: "统计", status: "待开始" },
   { code: "M5", title: "MVP 发布", status: "待开始" },
   { code: "M6", title: "局域网同步", status: "待开始" },

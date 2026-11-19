@@ -5,8 +5,9 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::domain::{
-    now, Account, Category, CategoryPatch, CategoryRule, EntityType, NewCategory, NewTransaction,
-    SyncChange, SyncOp, Transaction, TransactionKind, TransactionPatch, TransactionSource,
+    now, Account, Category, CategoryPatch, CategoryRule, CategoryRulePatch, EntityType,
+    NewCategory, NewCategoryRule, NewTransaction, SyncChange, SyncOp, Transaction,
+    TransactionFilter, TransactionKind, TransactionPage, TransactionPatch, TransactionSource,
 };
 use crate::error::{AppError, AppResult};
 
@@ -156,6 +157,55 @@ fn record_change(
 
 fn serialize_payload<T: Serialize>(value: &T) -> AppResult<String> {
     serde_json::to_string(value).map_err(|error| AppError::Invalid(error.to_string()))
+}
+
+/// 把筛选条件编译成参数化 SQL，杜绝字符串拼接用户输入。
+fn transaction_filter_sql(filter: &TransactionFilter) -> (String, Vec<Box<dyn ToSql>>) {
+    let mut clauses = vec!["deleted = 0".to_string()];
+    let mut values: Vec<Box<dyn ToSql>> = Vec::new();
+
+    if let Some(keyword) = &filter.keyword {
+        let pattern = format!("%{}%", keyword.trim().to_lowercase());
+        clauses.push(
+            "(LOWER(COALESCE(counterparty, '')) LIKE ?
+              OR LOWER(COALESCE(note, '')) LIKE ?
+              OR LOWER(external_id) LIKE ?)"
+                .to_string(),
+        );
+        values.push(Box::new(pattern.clone()));
+        values.push(Box::new(pattern.clone()));
+        values.push(Box::new(pattern));
+    }
+    if let Some(kind) = filter.kind {
+        clauses.push("kind = ?".to_string());
+        values.push(Box::new(kind.as_str().to_string()));
+    }
+    if let Some(category_id) = &filter.category_id {
+        if category_id == "__none__" {
+            clauses.push("category_id IS NULL".to_string());
+        } else {
+            clauses.push("category_id = ?".to_string());
+            values.push(Box::new(category_id.clone()));
+        }
+    }
+    if let Some(from) = &filter.from {
+        clauses.push("happened_at >= ?".to_string());
+        values.push(Box::new(from.clone()));
+    }
+    if let Some(to) = &filter.to {
+        clauses.push("happened_at <= ?".to_string());
+        values.push(Box::new(to.clone()));
+    }
+    if let Some(min) = filter.min_amount {
+        clauses.push("amount >= ?".to_string());
+        values.push(Box::new(min));
+    }
+    if let Some(max) = filter.max_amount {
+        clauses.push("amount <= ?".to_string());
+        values.push(Box::new(max));
+    }
+
+    (clauses.join(" AND "), values)
 }
 
 pub struct SqliteRepository<'a> {
@@ -357,6 +407,36 @@ impl TransactionRepository for SqliteRepository<'_> {
         tx.commit()?;
         Ok(true)
     }
+
+    fn search_transactions(&self, filter: &TransactionFilter) -> AppResult<TransactionPage> {
+        let (where_sql, mut values) = transaction_filter_sql(filter);
+        let limit = filter.limit.clamp(1, 500);
+        let offset = filter.offset.max(0);
+
+        let sql = format!(
+            "SELECT {TRANSACTION_COLUMNS} FROM transactions WHERE {where_sql}
+             ORDER BY happened_at DESC, id DESC LIMIT ? OFFSET ?"
+        );
+        values.push(Box::new(limit));
+        values.push(Box::new(offset));
+
+        let mut statement = self.conn.prepare(&sql)?;
+        let rows = statement.query_map(
+            params_from_iter(values.iter().map(|value| &**value)),
+            map_transaction,
+        )?;
+        let items = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+
+        let count_sql = format!("SELECT COUNT(*) FROM transactions WHERE {where_sql}");
+        let filter_values = &values[..values.len() - 2];
+        let total: i64 = self.conn.query_row(
+            &count_sql,
+            params_from_iter(filter_values.iter().map(|value| &**value)),
+            |row| row.get(0),
+        )?;
+
+        Ok(TransactionPage { items, total })
+    }
 }
 
 impl CategoryRepository for SqliteRepository<'_> {
@@ -514,6 +594,137 @@ impl CategoryRuleRepository for SqliteRepository<'_> {
         let rows = statement.query_map([], map_category_rule)?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
             .map_err(Into::into)
+    }
+
+    fn insert_rule(&self, input: &NewCategoryRule) -> AppResult<CategoryRule> {
+        if input.keyword.trim().is_empty() {
+            return Err(AppError::Invalid("规则关键词不能为空".to_string()));
+        }
+        let id = Uuid::new_v4().to_string();
+        let timestamp = now();
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
+            "INSERT INTO category_rules
+             (id, keyword, match_field, category_id, priority, created_at, updated_at,
+              device_id, version, deleted)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?7, 1, 0)",
+            params![
+                id,
+                input.keyword,
+                input.match_field,
+                input.category_id,
+                input.priority,
+                timestamp,
+                self.device_id,
+            ],
+        )?;
+        record_change(
+            &tx,
+            EntityType::CategoryRule,
+            &id,
+            SyncOp::Insert,
+            None,
+            &timestamp,
+            self.device_id,
+        )?;
+        tx.commit()?;
+
+        self.conn
+            .query_row(
+                "SELECT id, keyword, match_field, category_id, priority, created_at, updated_at,
+                        device_id, version, deleted
+                 FROM category_rules WHERE id = ?1 AND deleted = 0",
+                [&id],
+                map_category_rule,
+            )
+            .map_err(Into::into)
+    }
+
+    fn update_rule(&self, id: &str, patch: &CategoryRulePatch) -> AppResult<Option<CategoryRule>> {
+        let mut sets: Vec<String> = Vec::new();
+        let mut values: Vec<Box<dyn ToSql>> = Vec::new();
+        let mut set = |column: &str, value: Box<dyn ToSql>| {
+            sets.push(format!("{column} = ?"));
+            values.push(value);
+        };
+
+        if let Some(value) = &patch.keyword {
+            if value.trim().is_empty() {
+                return Err(AppError::Invalid("规则关键词不能为空".to_string()));
+            }
+            set("keyword", Box::new(value.clone()));
+        }
+        if let Some(value) = &patch.match_field {
+            set("match_field", Box::new(value.clone()));
+        }
+        if let Some(value) = &patch.category_id {
+            set("category_id", Box::new(value.clone()));
+        }
+        if let Some(value) = patch.priority {
+            set("priority", Box::new(value));
+        }
+
+        let timestamp = now();
+        set("updated_at", Box::new(timestamp.clone()));
+        set("device_id", Box::new(self.device_id.to_string()));
+        sets.push("version = version + 1".to_string());
+        values.push(Box::new(id.to_string()));
+
+        let sql = format!(
+            "UPDATE category_rules SET {} WHERE id = ? AND deleted = 0",
+            sets.join(", ")
+        );
+        let tx = self.conn.unchecked_transaction()?;
+        let affected = tx.execute(&sql, params_from_iter(values.iter().map(|value| &**value)))?;
+        if affected == 0 {
+            return Ok(None);
+        }
+
+        let updated = tx.query_row(
+            "SELECT id, keyword, match_field, category_id, priority, created_at, updated_at,
+                    device_id, version, deleted
+             FROM category_rules WHERE id = ?1 AND deleted = 0",
+            [id],
+            map_category_rule,
+        )?;
+        let payload = serialize_payload(&updated)?;
+        record_change(
+            &tx,
+            EntityType::CategoryRule,
+            id,
+            SyncOp::Update,
+            Some(&payload),
+            &timestamp,
+            self.device_id,
+        )?;
+        tx.commit()?;
+
+        Ok(Some(updated))
+    }
+
+    fn soft_delete_rule(&self, id: &str) -> AppResult<bool> {
+        let timestamp = now();
+        let tx = self.conn.unchecked_transaction()?;
+        let affected = tx.execute(
+            "UPDATE category_rules
+             SET deleted = 1, updated_at = ?2, device_id = ?3, version = version + 1
+             WHERE id = ?1 AND deleted = 0",
+            params![id, timestamp, self.device_id],
+        )?;
+        if affected == 0 {
+            return Ok(false);
+        }
+        record_change(
+            &tx,
+            EntityType::CategoryRule,
+            id,
+            SyncOp::Delete,
+            None,
+            &timestamp,
+            self.device_id,
+        )?;
+        tx.commit()?;
+        Ok(true)
     }
 }
 
@@ -722,5 +933,137 @@ mod tests {
             .iter()
             .all(|change| change.device_id == "test-device"));
         assert_eq!(repo.count_since(0).unwrap(), 3);
+    }
+
+    fn make(
+        external_id: &str,
+        kind: TransactionKind,
+        amount: i64,
+        counterparty: &str,
+        category_id: Option<String>,
+    ) -> NewTransaction {
+        NewTransaction {
+            external_id: external_id.to_string(),
+            kind,
+            amount,
+            counterparty: Some(counterparty.to_string()),
+            category_id,
+            happened_at: "2026-01-05T04:00:00.000Z".to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn search_filters_and_paginates() {
+        let conn = setup();
+        let repo = repository(&conn);
+        repo.insert_transaction(&make(
+            "A",
+            TransactionKind::Expense,
+            1000,
+            "星巴克",
+            Some("cat_food".to_string()),
+        ))
+        .unwrap();
+        repo.insert_transaction(&make("B", TransactionKind::Income, 5000, "某公司", None))
+            .unwrap();
+        repo.insert_transaction(&make(
+            "C",
+            TransactionKind::Expense,
+            2000,
+            "滴滴出行",
+            Some("cat_transport".to_string()),
+        ))
+        .unwrap();
+
+        assert_eq!(
+            repo.search_transactions(&TransactionFilter {
+                keyword: Some("滴滴".to_string()),
+                ..Default::default()
+            })
+            .unwrap()
+            .total,
+            1
+        );
+        assert_eq!(
+            repo.search_transactions(&TransactionFilter {
+                kind: Some(TransactionKind::Income),
+                ..Default::default()
+            })
+            .unwrap()
+            .total,
+            1
+        );
+        assert_eq!(
+            repo.search_transactions(&TransactionFilter {
+                category_id: Some("cat_food".to_string()),
+                ..Default::default()
+            })
+            .unwrap()
+            .total,
+            1
+        );
+        assert_eq!(
+            repo.search_transactions(&TransactionFilter {
+                category_id: Some("__none__".to_string()),
+                ..Default::default()
+            })
+            .unwrap()
+            .total,
+            1
+        );
+        assert_eq!(
+            repo.search_transactions(&TransactionFilter {
+                min_amount: Some(1500),
+                ..Default::default()
+            })
+            .unwrap()
+            .total,
+            2
+        );
+
+        let page = repo
+            .search_transactions(&TransactionFilter {
+                limit: 1,
+                offset: 1,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, 3);
+        assert_eq!(page.items.len(), 1);
+    }
+
+    #[test]
+    fn category_rule_crud() {
+        let conn = setup();
+        let repo = repository(&conn);
+        let initial = repo.list_rules().unwrap().len();
+        assert!(initial > 0);
+
+        let created = repo
+            .insert_rule(&NewCategoryRule {
+                keyword: "咖啡".to_string(),
+                match_field: "counterparty".to_string(),
+                category_id: "cat_food".to_string(),
+                priority: 999,
+            })
+            .unwrap();
+        assert_eq!(created.priority, 999);
+
+        let updated = repo
+            .update_rule(
+                &created.id,
+                &CategoryRulePatch {
+                    priority: Some(1000),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.priority, 1000);
+        assert_eq!(updated.version, 2);
+
+        assert!(repo.soft_delete_rule(&created.id).unwrap());
+        assert_eq!(repo.list_rules().unwrap().len(), initial);
     }
 }

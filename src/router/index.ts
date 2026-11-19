@@ -1,6 +1,8 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from "vue-router";
 import OverviewView from "@/views/OverviewView.vue";
 import ImportView from "@/views/ImportView.vue";
+import TransactionsView from "@/views/TransactionsView.vue";
+import CategoriesView from "@/views/CategoriesView.vue";
 import ModulePlaceholder from "@/components/ModulePlaceholder.vue";
 
 const routes: RouteRecordRaw[] = [
@@ -13,13 +15,8 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/transactions",
     name: "transactions",
-    component: ModulePlaceholder,
-    meta: {
-      title: "交易流水",
-      icon: "≡",
-      description: "列表、搜索与筛选、编辑、手工录入，预计在 M3 实现。",
-      milestone: "M3",
-    },
+    component: TransactionsView,
+    meta: { title: "交易流水", icon: "≡" },
   },
   {
     path: "/import",
@@ -30,13 +27,8 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/categories",
     name: "categories",
-    component: ModulePlaceholder,
-    meta: {
-      title: "分类管理",
-      icon: "▦",
-      description: "分类层级与自动分类规则，预计在 M3 实现。",
-      milestone: "M3",
-    },
+    component: CategoriesView,
+    meta: { title: "分类管理", icon: "▦" },
   },
   {
     path: "/statistics",
