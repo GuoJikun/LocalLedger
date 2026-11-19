@@ -1,0 +1,76 @@
+// Element Plus 主题变量：按 macOS Human Interface Guidelines 的配色、圆角与控件尺寸定制。
+// 通过 Sass 模块配置覆盖官方 !default 变量，所有 Element Plus 组件会统一使用这些值。
+@use "element-plus/theme-chalk/src/common/var.scss" with (
+  // macOS 系统色：蓝 / 绿 / 橙 / 红 / 灰
+  $colors: (
+    "primary": ("base": #007aff),
+    "success": ("base": #34c759),
+    "warning": ("base": #ff9500),
+    "danger": ("base": #ff3b30),
+    "error": ("base": #ff3b30),
+    "info": ("base": #8e8e93),
+  ),
+  // 标签色：primary / secondary / tertiary / quaternary
+  $text-color: (
+    "primary": #1d1d1f,
+    "regular": #3a3a3c,
+    "secondary": #6e6e73,
+    "placeholder": #8e8e93,
+    "disabled": #c7c7cc,
+  ),
+  // 发丝级描边，贴合 macOS 的 1px / 0.5pt 边框观感
+  $border-color: (
+    "": rgba(0, 0, 0, 0.12),
+    "light": rgba(0, 0, 0, 0.08),
+    "lighter": rgba(0, 0, 0, 0.05),
+    "extra-light": rgba(0, 0, 0, 0.03),
+    "dark": rgba(0, 0, 0, 0.18),
+    "darker": rgba(0, 0, 0, 0.24),
+  ),
+  $fill-color: (
+    "": #f2f2f7,
+    "light": #f5f5f7,
+    "lighter": #fafafa,
+    "extra-light": #fcfcfd,
+    "dark": #e8e8ed,
+    "darker": #dcdce1,
+    "blank": #ffffff,
+  ),
+  $bg-color: (
+    "": #ffffff,
+    "page": #f5f5f7,
+    "overlay": #ffffff,
+  ),
+  // macOS 控件圆角：按钮 / 输入框 6px，分组容器 12px
+  $border-radius: (
+    "base": 6px,
+    "small": 4px,
+    "round": 12px,
+    "circle": 100%,
+  ),
+  $box-shadow: (
+    "": (0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04)),
+    "light": (0 2px 8px rgba(0, 0, 0, 0.08)),
+    "lighter": (0 1px 4px rgba(0, 0, 0, 0.06)),
+    "dark": (0 16px 48px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.1)),
+  ),
+  $font-family: (
+    "": '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif',
+  ),
+  $font-size: (
+    "extra-large": 22px,
+    "large": 17px,
+    "medium": 15px,
+    "base": 13px,
+    "small": 12px,
+    "extra-small": 11px,
+  ),
+  // macOS 标准控件高度：大 32 / 默认 28 / 小 24
+  $common-component-size: (
+    "large": 32px,
+    "default": 28px,
+    "small": 24px,
+  ),
+);
+
+@use "element-plus/theme-chalk/src/index.scss" as *;

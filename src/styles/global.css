@@ -1,49 +1,117 @@
 :root {
   color-scheme: light;
 
-  --bg: #f4f6f9;
+  /* macOS 系统色板（浅色） */
+  --bg: #f5f5f7;
   --surface: #ffffff;
-  --surface-2: #eef1f6;
-  --surface-hover: #e8edf5;
-  --border: #e2e6ee;
-  --text: #1e2430;
-  --text-muted: #6b7280;
-  --text-faint: #9aa1ae;
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-soft: #e7efff;
-  --success: #0f9d6e;
-  --warning: #d97706;
-  --danger: #dc2626;
-  --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  --surface-2: #f2f2f7;
+  --surface-hover: #e9e9ee;
+  --surface-vibrant: rgba(246, 246, 248, 0.72);
+  --border: rgba(0, 0, 0, 0.1);
+  --text: #1d1d1f;
+  --text-muted: #6e6e73;
+  --text-faint: #8e8e93;
+  --primary: #007aff;
+  --primary-hover: #0062cc;
+  --primary-soft: #e5f1ff;
+  --success: #34c759;
+  --warning: #ff9500;
+  --danger: #ff3b30;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
   --radius: 12px;
-  --radius-sm: 8px;
+  --radius-sm: 6px;
 
-  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei",
-    "PingFang SC", "Noto Sans CJK SC", "WenQuanYi Micro Hei", sans-serif;
-  font-size: 14px;
-  line-height: 1.6;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #10141c;
-  --surface: #181e29;
-  --surface-2: #222a38;
-  --surface-hover: #2a3444;
-  --border: #2c3546;
-  --text: #e7ebf2;
-  --text-muted: #9ba6b8;
-  --text-faint: #6d798d;
-  --primary: #5b8cff;
-  --primary-hover: #7aa2ff;
-  --primary-soft: #1d2b4d;
-  --success: #34d399;
-  --warning: #fbbf24;
-  --danger: #f87171;
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  /* macOS 系统色板（深色） */
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --surface-hover: #3a3a3c;
+  --surface-vibrant: rgba(28, 28, 30, 0.72);
+  --border: rgba(255, 255, 255, 0.12);
+  --text: #f5f5f7;
+  --text-muted: #a1a1a6;
+  --text-faint: #6e6e73;
+  --primary: #0a84ff;
+  --primary-hover: #409cff;
+  --primary-soft: rgba(10, 132, 255, 0.18);
+  --success: #30d158;
+  --warning: #ff9f0a;
+  --danger: #ff453a;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+
+  /* 覆盖 Element Plus 官方 dark css-vars 的默认色，保持 macOS 系统色 */
+  --el-color-primary: #0a84ff;
+  --el-color-primary-light-3: rgba(10, 132, 255, 0.75);
+  --el-color-primary-light-5: rgba(10, 132, 255, 0.55);
+  --el-color-primary-light-7: rgba(10, 132, 255, 0.35);
+  --el-color-primary-light-8: rgba(10, 132, 255, 0.25);
+  --el-color-primary-light-9: rgba(10, 132, 255, 0.15);
+  --el-color-primary-dark-2: #409cff;
+  --el-color-success: #30d158;
+  --el-color-success-light-3: rgba(48, 209, 88, 0.75);
+  --el-color-success-light-5: rgba(48, 209, 88, 0.55);
+  --el-color-success-light-7: rgba(48, 209, 88, 0.35);
+  --el-color-success-light-8: rgba(48, 209, 88, 0.25);
+  --el-color-success-light-9: rgba(48, 209, 88, 0.15);
+  --el-color-success-dark-2: #5ada7d;
+  --el-color-warning: #ff9f0a;
+  --el-color-warning-light-3: rgba(255, 159, 10, 0.75);
+  --el-color-warning-light-5: rgba(255, 159, 10, 0.55);
+  --el-color-warning-light-7: rgba(255, 159, 10, 0.35);
+  --el-color-warning-light-8: rgba(255, 159, 10, 0.25);
+  --el-color-warning-light-9: rgba(255, 159, 10, 0.15);
+  --el-color-warning-dark-2: #ffb340;
+  --el-color-danger: #ff453a;
+  --el-color-danger-light-3: rgba(255, 69, 58, 0.75);
+  --el-color-danger-light-5: rgba(255, 69, 58, 0.55);
+  --el-color-danger-light-7: rgba(255, 69, 58, 0.35);
+  --el-color-danger-light-8: rgba(255, 69, 58, 0.25);
+  --el-color-danger-light-9: rgba(255, 69, 58, 0.15);
+  --el-color-danger-dark-2: #ff6b62;
+  --el-color-error: #ff453a;
+  --el-color-error-light-3: rgba(255, 69, 58, 0.75);
+  --el-color-error-light-5: rgba(255, 69, 58, 0.55);
+  --el-color-error-light-7: rgba(255, 69, 58, 0.35);
+  --el-color-error-light-8: rgba(255, 69, 58, 0.25);
+  --el-color-error-light-9: rgba(255, 69, 58, 0.15);
+  --el-color-error-dark-2: #ff6b62;
+  --el-color-info: #8e8e93;
+  --el-color-info-light-3: rgba(142, 142, 147, 0.75);
+  --el-color-info-light-5: rgba(142, 142, 147, 0.55);
+  --el-color-info-light-7: rgba(142, 142, 147, 0.35);
+  --el-color-info-light-8: rgba(142, 142, 147, 0.25);
+  --el-color-info-light-9: rgba(142, 142, 147, 0.15);
+  --el-color-info-dark-2: #a5a5aa;
+
+  --el-bg-color: #1c1c1e;
+  --el-bg-color-page: #000000;
+  --el-bg-color-overlay: #2c2c2e;
+  --el-text-color-primary: #f5f5f7;
+  --el-text-color-regular: #ebebf5;
+  --el-text-color-secondary: #a1a1a6;
+  --el-text-color-placeholder: #6e6e73;
+  --el-text-color-disabled: #5a5a5e;
+  --el-border-color: rgba(255, 255, 255, 0.14);
+  --el-border-color-light: rgba(255, 255, 255, 0.1);
+  --el-border-color-lighter: rgba(255, 255, 255, 0.07);
+  --el-border-color-extra-light: rgba(255, 255, 255, 0.04);
+  --el-border-color-dark: rgba(255, 255, 255, 0.2);
+  --el-border-color-darker: rgba(255, 255, 255, 0.28);
+  --el-fill-color: #2c2c2e;
+  --el-fill-color-light: #242426;
+  --el-fill-color-lighter: #1f1f21;
+  --el-fill-color-extra-light: #1a1a1c;
+  --el-fill-color-blank: #1c1c1e;
 }
 
 *,
@@ -76,15 +144,32 @@ a {
   text-decoration: none;
 }
 
+/* macOS 风格悬浮滚动条：窄、圆角、半透明 */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: rgba(0, 0, 0, 0.22);
   border-radius: 999px;
-  border: 2px solid var(--bg);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.36);
+  background-clip: padding-box;
+}
+
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  background-clip: padding-box;
+}
+
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.34);
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-track {

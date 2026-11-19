@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { isTauri } from "@tauri-apps/api/core";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "@/api/tauri";
@@ -16,15 +17,20 @@ const message = ref("");
 let unlistenDrop: UnlistenFn | null = null;
 
 onMounted(async () => {
-  unlistenDrop = await getCurrentWebview().onDragDropEvent((event) => {
-    if (event.payload.type === "enter") dragging.value = true;
-    else if (event.payload.type === "leave") dragging.value = false;
-    else if (event.payload.type === "drop") {
-      dragging.value = false;
-      const path = event.payload.paths[0];
-      if (path) void selectFile(path);
-    }
-  });
+  if (!isTauri()) return;
+  try {
+    unlistenDrop = await getCurrentWebview().onDragDropEvent((event) => {
+      if (event.payload.type === "enter") dragging.value = true;
+      else if (event.payload.type === "leave") dragging.value = false;
+      else if (event.payload.type === "drop") {
+        dragging.value = false;
+        const path = event.payload.paths[0];
+        if (path) void selectFile(path);
+      }
+    });
+  } catch {
+    // 拖拽监听不可用时仍可通过点击选择文件。
+  }
 });
 
 onUnmounted(() => unlistenDrop?.());

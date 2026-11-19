@@ -198,6 +198,13 @@ export function yuanToFen(yuan: string): number {
   return Math.round(value * 100);
 }
 
+/** 金额前缀：收入 +、支出 -、转账无符号。 */
+export function amountSign(kind: TransactionKind): string {
+  if (kind === "income") return "+";
+  if (kind === "expense") return "-";
+  return "";
+}
+
 /** 分 → 展示用字符串。 */
 export function formatAmount(fen: number): string {
   const sign = fen < 0 ? "-" : "";

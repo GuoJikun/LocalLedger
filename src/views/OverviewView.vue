@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { api } from "@/api/tauri";
 import { useAppInfo } from "@/composables/useAppInfo";
-import { formatAmount, yuanToFen } from "@/types/domain";
+import { amountSign, formatAmount, yuanToFen } from "@/types/domain";
 import type { DataOverview, Transaction, TransactionKind } from "@/types/domain";
 
 const { version } = useAppInfo();
@@ -176,7 +176,7 @@ onMounted(loadData);
             <el-table-column label="金额" width="110" align="right">
               <template #default="{ row }">
                 <span :class="['amount', row.kind]">
-                  {{ row.kind === "income" ? "+" : "-" }}{{ formatAmount(row.amount) }}
+                  {{ amountSign(row.kind) }}{{ formatAmount(row.amount) }}
                 </span>
               </template>
             </el-table-column>
@@ -241,6 +241,10 @@ onMounted(loadData);
 
 .amount.income {
   color: var(--success);
+}
+
+.amount.transfer {
+  color: var(--text-muted);
 }
 
 .success-text {

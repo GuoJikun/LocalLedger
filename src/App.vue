@@ -1,14 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed } from "vue";
 import { RouterView, useRoute } from "vue-router";
-import { ElButton, ElIcon } from "element-plus";
-import { Close, CopyDocument, FullScreen, Minus } from "@element-plus/icons-vue";
-import { isTauri } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 
 const route = useRoute();
-const inTauri = isTauri();
-const maximized = ref(false);
 
 const navItems = [
   { to: "/", icon: "◎", label: "总览" },
@@ -20,53 +14,12 @@ const navItems = [
 ];
 
 const activePath = computed(() => route.path);
-
-async function syncMaximized() {
-  if (!inTauri) return;
-  try {
-    maximized.value = await getCurrentWindow().isMaximized();
-  } catch {
-    // 浏览器预览模式忽略
-  }
-}
-
-async function minimize() {
-  try {
-    await getCurrentWindow().minimize();
-  } catch {
-    // 浏览器预览模式忽略
-  }
-}
-
-async function toggleMaximize() {
-  try {
-    await getCurrentWindow().toggleMaximize();
-    await syncMaximized();
-  } catch {
-    // 浏览器预览模式忽略
-  }
-}
-
-async function closeWindow() {
-  try {
-    await getCurrentWindow().close();
-  } catch {
-    // 浏览器预览模式忽略
-  }
-}
-
-onMounted(() => {
-  void syncMaximized();
-  if (inTauri) window.addEventListener("resize", syncMaximized);
-});
-
-onUnmounted(() => window.removeEventListener("resize", syncMaximized));
 </script>
 
 <template>
   <div class="shell">
     <aside class="sidebar">
-      <div class="brand" data-tauri-drag-region>
+      <div class="brand">
         <div class="brand-mark">净</div>
         <div>
           <strong>净账</strong>
@@ -93,32 +46,9 @@ onUnmounted(() => window.removeEventListener("resize", syncMaximized));
       </div>
     </aside>
 
-    <div class="main">
-      <header class="topbar">
-        <div class="drag-area" data-tauri-drag-region @dblclick="toggleMaximize"></div>
-        <div v-if="inTauri" class="window-controls">
-          <ElButton class="win-btn" text circle title="最小化" @click="minimize">
-            <ElIcon><Minus /></ElIcon>
-          </ElButton>
-          <ElButton
-            class="win-btn"
-            text
-            circle
-            :title="maximized ? '还原' : '最大化'"
-            @click="toggleMaximize"
-          >
-            <ElIcon><component :is="maximized ? CopyDocument : FullScreen" /></ElIcon>
-          </ElButton>
-          <ElButton class="win-btn close" text circle title="关闭" @click="closeWindow">
-            <ElIcon><Close /></ElIcon>
-          </ElButton>
-        </div>
-      </header>
-
-      <main class="content">
-        <RouterView />
-      </main>
-    </div>
+    <main class="content">
+      <RouterView />
+    </main>
   </div>
 </template>
 
@@ -134,7 +64,9 @@ onUnmounted(() => window.removeEventListener("resize", syncMaximized));
   width: 220px;
   flex-shrink: 0;
   padding: 16px 10px;
-  background: var(--surface);
+  background: var(--surface-vibrant);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
   border-right: 1px solid var(--border);
 }
 
@@ -176,8 +108,8 @@ onUnmounted(() => window.removeEventListener("resize", syncMaximized));
 }
 
 .side-menu :deep(.el-menu-item) {
-  height: 42px;
-  line-height: 42px;
+  height: 36px;
+  line-height: 36px;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
 }
@@ -211,56 +143,9 @@ onUnmounted(() => window.removeEventListener("resize", syncMaximized));
   background: var(--success);
 }
 
-.main {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-}
-
-.topbar {
-  display: flex;
-  align-items: center;
-  height: 40px;
-  flex-shrink: 0;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  user-select: none;
-}
-
-.drag-area {
-  flex: 1;
-  height: 100%;
-}
-
-.window-controls {
-  display: flex;
-  align-items: center;
-  height: 100%;
-  flex-shrink: 0;
-}
-
-.win-btn {
-  width: 38px;
-  height: 40px;
-  margin: 0;
-  border-radius: 0;
-  color: var(--text-muted);
-  font-size: 15px;
-}
-
-.win-btn:hover {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-.win-btn.close:hover {
-  background: var(--danger);
-  color: #fff;
-}
-
 .content {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
   padding: 24px;

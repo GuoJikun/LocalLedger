@@ -199,8 +199,22 @@ const totalExpense = () => summaries.value.reduce((sum, item) => sum + item.expe
 
 watch(isDark, () => nextTick(renderCharts));
 
-onMounted(load);
+function resizeChart(chart: EChartsType | null) {
+  if (chart && !chart.isDisposed()) chart.resize();
+}
+
+function handleResize() {
+  resizeChart(barChart);
+  resizeChart(pieChart);
+  resizeChart(lineChart);
+}
+
+onMounted(() => {
+  window.addEventListener("resize", handleResize);
+  void load();
+});
 onUnmounted(() => {
+  window.removeEventListener("resize", handleResize);
   barChart?.dispose();
   pieChart?.dispose();
   lineChart?.dispose();

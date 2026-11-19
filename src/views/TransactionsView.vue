@@ -2,7 +2,7 @@
 import { onMounted, reactive, ref } from "vue";
 import { ElMessageBox } from "element-plus";
 import { api } from "@/api/tauri";
-import { formatAmount, yuanToFen } from "@/types/domain";
+import { amountSign, formatAmount, yuanToFen } from "@/types/domain";
 import type {
   Category,
   Transaction,
@@ -76,8 +76,9 @@ async function load() {
       ...filter,
       kind: filter.kind || undefined,
       category_id: filter.category_id || undefined,
-      from: filter.from ? new Date(filter.from).toISOString() : undefined,
-      to: filter.to ? new Date(`${filter.to}T23:59:59`).toISOString() : undefined,
+      // 账单时间由后端按 UTC+8 归一化，筛选边界也按同一时区解释。
+      from: filter.from ? new Date(`${filter.from}T00:00:00+08:00`).toISOString() : undefined,
+      to: filter.to ? new Date(`${filter.to}T23:59:59+08:00`).toISOString() : undefined,
     };
     page.value = await api.searchTransactions(request);
     error.value = "";
@@ -148,11 +149,12 @@ async function save() {
     formError.value = "请输入有效金额（大于 0 元）";
     return;
   }
-  const happenedAt = new Date(form.happened_at).toISOString();
-  if (Number.isNaN(new Date(happenedAt).getTime())) {
+  const happenedDate = new Date(form.happened_at);
+  if (Number.isNaN(happenedDate.getTime())) {
     formError.value = "时间格式无效";
     return;
   }
+  const happenedAt = happenedDate.toISOString();
   const fields = {
     kind: form.kind,
     amount,
@@ -199,7 +201,11 @@ async function remove(row: unknown) {
 }
 
 onMounted(async () => {
-  categories.value = await api.listCategories();
+  try {
+    categories.value = await api.listCategories();
+  } catch (cause) {
+    error.value = describe(cause);
+  }
   await load();
 });
 </script>
@@ -267,7 +273,7 @@ onMounted(async () => {
         <el-table-column label="金额（元）" width="110" align="right">
           <template #default="{ row }">
             <span :class="['amount', row.kind]">
-              {{ row.kind === "income" ? "+" : "-" }}{{ formatAmount(row.amount) }}
+              {{ amountSign(row.kind) }}{{ formatAmount(row.amount) }}
             </span>
           </template>
         </el-table-column>
@@ -396,6 +402,10 @@ onMounted(async () => {
 
 .amount.income {
   color: var(--success);
+}
+
+.amount.transfer {
+  color: var(--text-muted);
 }
 
 .pager {

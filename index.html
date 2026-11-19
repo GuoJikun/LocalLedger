@@ -4,6 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#ffffff" />
+    <script>
+      // 在 Vue 挂载前同步主题，避免深色模式启动时闪一下浅色。
+      (function () {
+        try {
+          var mode = localStorage.getItem("local-ledger.theme-mode");
+          if (mode !== "light" && mode !== "dark" && mode !== "system") mode = "system";
+          var dark =
+            mode === "dark" ||
+            (mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.dataset.theme = dark ? "dark" : "light";
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (e) {
+          // localStorage / matchMedia 不可用时保持默认浅色。
+        }
+      })();
+    </script>
     <title>净账 LocalLedger</title>
   </head>
   <body>
