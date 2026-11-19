@@ -52,6 +52,14 @@ pub fn parse(text: &str) -> ImportResult<ParsedBill> {
         }
 
         let flow_text = cell(&record, flow);
+        // 支付宝的「不计收支」（余额理财、退款原路退回等）不属于收入/支出，必须排除。
+        if flow_text.contains("不计收支") {
+            issues.push(RowIssue {
+                line,
+                reason: "收/支为「不计收支」，已跳过".to_string(),
+            });
+            continue;
+        }
         let kind = match parse_kind(&flow_text) {
             Some(kind) => kind,
             None => {
@@ -162,7 +170,11 @@ mod tests {
 
         let bill = parse(TAB_SAMPLE).unwrap();
         assert_eq!(bill.rows.len(), 3);
-        assert_eq!(bill.issues.len(), 1);
+        assert_eq!(bill.issues.len(), 2);
+        assert!(bill
+            .issues
+            .iter()
+            .any(|issue| issue.reason.contains("不计收支")));
 
         let first = &bill.rows[0];
         assert_eq!(first.input.external_id, "ALI-TAB-001");
