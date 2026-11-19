@@ -4,6 +4,7 @@ import type {
   Category,
   DataOverview,
   Device,
+  ImportSummary,
   NewCategory,
   NewTransaction,
   SyncChange,
@@ -29,4 +30,7 @@ export const api = {
   listSyncChanges: (sinceSeq: number, limit = 500) =>
     invoke<SyncChange[]>("list_sync_changes", { sinceSeq, limit }),
   cursorVersion: () => invoke<number>("cursor_version"),
+
+  previewBill: (path: string) => invoke<string>("preview_bill", { path }),
+  importBill: (path: string) => invoke<ImportSummary>("import_bill", { path }),
 };

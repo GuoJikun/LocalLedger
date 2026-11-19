@@ -87,6 +87,21 @@ export interface DataOverview {
   pending_changes: number;
 }
 
+export interface RowIssue {
+  line: number;
+  reason: string;
+}
+
+export interface ImportSummary {
+  platform: string;
+  total_rows: number;
+  imported: number;
+  duplicates: number;
+  skipped: number;
+  classified: number;
+  errors: RowIssue[];
+}
+
 export interface SyncChange {
   seq: number;
   entity_type: "account" | "transaction" | "category" | "category_rule";

@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod domain;
 mod error;
+mod importer;
 mod repository;
 mod state;
 
@@ -28,6 +29,7 @@ fn app_data_dir<R: Runtime>(app: AppHandle<R>) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
@@ -64,6 +66,8 @@ pub fn run() {
             commands::delete_category,
             commands::list_sync_changes,
             commands::cursor_version,
+            commands::preview_bill,
+            commands::import_bill,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");

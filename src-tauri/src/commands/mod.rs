@@ -9,6 +9,10 @@ use crate::domain::{
     TransactionPatch, TransactionSource,
 };
 use crate::error::AppError;
+use crate::importer::{
+    self,
+    service::{self, ImportSummary},
+};
 use crate::repository::{
     AccountRepository, CategoryRepository, SqliteRepository, SyncChangeRepository,
     TransactionRepository,
@@ -193,6 +197,26 @@ pub fn list_sync_changes(
 }
 
 #[tauri::command]
+pub fn preview_bill(path: String) -> Result<String, String> {
+    let bytes = std::fs::read(&path).map_err(|error| error.to_string())?;
+    let text = importer::decode(&bytes).map_err(|error| error.to_string())?;
+    let platform = importer::detect(&text).map_err(|error| error.to_string())?;
+    Ok(platform.label().to_string())
+}
+
+fn import_bill_inner(path: &str, state: &AppState) -> Result<ImportSummary, String> {
+    let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+    let bill = importer::parse(&bytes).map_err(|error| error.to_string())?;
+    let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
+    service::persist(&repo(&conn, state), bill).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn import_bill(path: String, state: State<'_, AppState>) -> Result<ImportSummary, String> {
+    import_bill_inner(&path, &state)
+}
+
+#[tauri::command]
 pub fn cursor_version(state: State<'_, AppState>) -> Result<i64, String> {
     // 供同步模块读取当前游标；M1 仅暴露基础能力。
     let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
@@ -201,4 +225,44 @@ pub fn cursor_version(state: State<'_, AppState>) -> Result<i64, String> {
         .optional()
         .map_err(|error| error.to_string())?;
     Ok(value.unwrap_or(0))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::*;
+    use crate::db::{migrate, open_in_memory};
+
+    fn test_state() -> AppState {
+        let conn = open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        AppState {
+            conn: Mutex::new(conn),
+            device_id: "test-device".to_string(),
+            device_name: "测试机".to_string(),
+            database_path: ":memory:".to_string(),
+        }
+    }
+
+    #[test]
+    fn import_command_reads_gbk_file_and_is_idempotent() {
+        let state = test_state();
+        let source = include_str!("../../tests/fixtures/alipay_sample.csv");
+        let (gbk, _, _) = encoding_rs::GBK.encode(source);
+        let path = std::env::temp_dir().join("local-ledger-import-command-test.csv");
+        std::fs::write(&path, gbk.as_ref()).unwrap();
+
+        let path = path.to_string_lossy().into_owned();
+        let first = import_bill_inner(&path, &state).unwrap();
+        assert_eq!(first.platform, "支付宝");
+        assert_eq!(first.imported, 3);
+        assert_eq!(first.classified, 3);
+
+        let second = import_bill_inner(&path, &state).unwrap();
+        assert_eq!(second.imported, 0);
+        assert_eq!(second.duplicates, 3);
+
+        std::fs::remove_file(path).unwrap();
+    }
 }

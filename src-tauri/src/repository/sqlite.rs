@@ -5,12 +5,15 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::domain::{
-    now, Account, Category, CategoryPatch, EntityType, NewCategory, NewTransaction, SyncChange,
-    SyncOp, Transaction, TransactionKind, TransactionPatch, TransactionSource,
+    now, Account, Category, CategoryPatch, CategoryRule, EntityType, NewCategory, NewTransaction,
+    SyncChange, SyncOp, Transaction, TransactionKind, TransactionPatch, TransactionSource,
 };
 use crate::error::{AppError, AppResult};
 
-use super::{AccountRepository, CategoryRepository, SyncChangeRepository, TransactionRepository};
+use super::{
+    AccountRepository, CategoryRepository, CategoryRuleRepository, SyncChangeRepository,
+    TransactionRepository,
+};
 
 const TRANSACTION_COLUMNS: &str =
     "id, account_id, source, external_id, kind, amount, counterparty, category_id, note, \
@@ -61,6 +64,21 @@ fn map_category(row: &Row<'_>) -> rusqlite::Result<Category> {
         icon: row.get("icon")?,
         color: row.get("color")?,
         sort_order: row.get("sort_order")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+        device_id: row.get("device_id")?,
+        version: row.get("version")?,
+        deleted: bit(row.get("deleted")?),
+    })
+}
+
+fn map_category_rule(row: &Row<'_>) -> rusqlite::Result<CategoryRule> {
+    Ok(CategoryRule {
+        id: row.get("id")?,
+        keyword: row.get("keyword")?,
+        match_field: row.get("match_field")?,
+        category_id: row.get("category_id")?,
+        priority: row.get("priority")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         device_id: row.get("device_id")?,
@@ -481,6 +499,21 @@ impl CategoryRepository for SqliteRepository<'_> {
         )?;
         tx.commit()?;
         Ok(true)
+    }
+}
+
+impl CategoryRuleRepository for SqliteRepository<'_> {
+    fn list_rules(&self) -> AppResult<Vec<CategoryRule>> {
+        let mut statement = self.conn.prepare(
+            "SELECT id, keyword, match_field, category_id, priority, created_at, updated_at,
+                    device_id, version, deleted
+             FROM category_rules
+             WHERE deleted = 0
+             ORDER BY priority DESC, id ASC",
+        )?;
+        let rows = statement.query_map([], map_category_rule)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
     }
 }
 

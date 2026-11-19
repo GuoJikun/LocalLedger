@@ -126,8 +126,6 @@ pub struct Transaction {
     pub deleted: bool,
 }
 
-/// M3 自动分类规则使用，M1 先定义模型以固定数据结构。
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CategoryRule {
     pub id: String,

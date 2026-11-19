@@ -7,8 +7,8 @@ pub mod sqlite;
 pub use sqlite::SqliteRepository;
 
 use crate::domain::{
-    Account, Category, CategoryPatch, NewCategory, NewTransaction, SyncChange, Transaction,
-    TransactionPatch, TransactionSource,
+    Account, Category, CategoryPatch, CategoryRule, NewCategory, NewTransaction, SyncChange,
+    Transaction, TransactionPatch, TransactionSource,
 };
 use crate::error::AppResult;
 
@@ -39,6 +39,10 @@ pub trait CategoryRepository {
 
 pub trait AccountRepository {
     fn list_accounts(&self, include_deleted: bool) -> AppResult<Vec<Account>>;
+}
+
+pub trait CategoryRuleRepository {
+    fn list_rules(&self) -> AppResult<Vec<CategoryRule>>;
 }
 
 pub trait SyncChangeRepository {

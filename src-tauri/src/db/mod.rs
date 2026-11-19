@@ -7,7 +7,10 @@ use rusqlite::{params, Connection, OptionalExtension};
 use crate::domain::{now, Device};
 use crate::error::{AppError, AppResult};
 
-const MIGRATIONS: &[(&str, &str)] = &[("1", include_str!("migrations/001_init.sql"))];
+const MIGRATIONS: &[(&str, &str)] = &[
+    ("1", include_str!("migrations/001_init.sql")),
+    ("2", include_str!("migrations/002_auto_category_rules.sql")),
+];
 const SCHEMA_VERSION_KEY: &str = "schema_version";
 const DEVICE_ID_KEY: &str = "device_id";
 
@@ -138,7 +141,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(version, "1");
+        assert_eq!(version, "2");
 
         let accounts: i64 = conn
             .query_row("SELECT COUNT(*) FROM accounts", [], |r| r.get(0))

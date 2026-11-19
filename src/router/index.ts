@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from "vue-router";
 import OverviewView from "@/views/OverviewView.vue";
+import ImportView from "@/views/ImportView.vue";
 import ModulePlaceholder from "@/components/ModulePlaceholder.vue";
 
 const routes: RouteRecordRaw[] = [
@@ -23,13 +24,8 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/import",
     name: "import",
-    component: ModulePlaceholder,
-    meta: {
-      title: "导入账单",
-      icon: "↥",
-      description: "支付宝 / 微信 CSV 解析与导入，预计在 M2 实现。",
-      milestone: "M2",
-    },
+    component: ImportView,
+    meta: { title: "导入账单", icon: "↥" },
   },
   {
     path: "/categories",
