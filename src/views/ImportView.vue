@@ -122,6 +122,28 @@ async function runImport() {
       </div>
       <p v-else class="all-good">全部行均已处理。</p>
     </section>
+
+    <details class="supported">
+      <summary>当前支持的账单表头（点击展开对照）</summary>
+      <div class="header-grid">
+        <section class="header-card">
+          <div class="header-title">
+            <h3>支付宝</h3>
+            <span>逗号或 Tab 分隔均可；自动跳过说明行</span>
+          </div>
+          <pre>交易时间	交易分类	交易对方	对方账号	商品说明	收/支	金额	 收/付款方式 	交易状态	 交易订单号 	商家订单号	备注</pre>
+          <p class="header-note">也兼容旧版列名：交易号 / 交易订单号 / 商家订单号，商品说明 / 商品，收/支 / 收支，金额 / 金额(元)，收/付款方式 / 支付方式，交易状态 / 当前状态。</p>
+        </section>
+        <section class="header-card">
+          <div class="header-title">
+            <h3>微信</h3>
+            <span>UTF-8 BOM；自动跳过说明行</span>
+          </div>
+          <pre>交易时间,交易类型,交易对方,商品,收/支,金额(元),支付方式,当前状态,交易单号</pre>
+          <p class="header-note">必需列：交易时间 + 交易单号。转账 / 红包按转账处理，退款按收入处理；状态为「已关闭 / 失败」的行会跳过。</p>
+        </section>
+      </div>
+    </details>
   </div>
 </template>
 
@@ -286,5 +308,82 @@ th {
   margin: 18px 0 0;
   color: var(--success);
   font-size: 12px;
+}
+
+.supported {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.supported summary {
+  padding: 12px 18px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 13px;
+  user-select: none;
+}
+
+.supported summary:hover {
+  color: var(--text);
+}
+
+.header-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 0 18px 18px;
+}
+
+.header-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.header-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.header-title h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.header-title span {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.header-card pre {
+  margin: 0;
+  padding: 10px;
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.7;
+  white-space: pre;
+}
+
+.header-note {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+@media (max-width: 760px) {
+  .header-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
