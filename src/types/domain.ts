@@ -144,6 +144,28 @@ export interface CategoryRulePatch {
   priority?: number;
 }
 
+export interface MonthSummary {
+  month: string;
+  income: number;
+  expense: number;
+  transfer: number;
+  count: number;
+}
+
+export interface CategorySlice {
+  category_id: string;
+  name: string;
+  amount: number;
+  count: number;
+  percent: number;
+}
+
+export interface DailyPoint {
+  day: string;
+  income: number;
+  expense: number;
+}
+
 export interface RowIssue {
   line: number;
   reason: string;

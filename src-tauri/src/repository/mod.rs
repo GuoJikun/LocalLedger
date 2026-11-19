@@ -7,9 +7,9 @@ pub mod sqlite;
 pub use sqlite::SqliteRepository;
 
 use crate::domain::{
-    Account, Category, CategoryPatch, CategoryRule, CategoryRulePatch, NewCategory,
-    NewCategoryRule, NewTransaction, SyncChange, Transaction, TransactionFilter, TransactionPage,
-    TransactionPatch, TransactionSource,
+    Account, Category, CategoryPatch, CategoryRule, CategoryRulePatch, CategorySlice, DailyPoint,
+    MonthSummary, NewCategory, NewCategoryRule, NewTransaction, SyncChange, Transaction,
+    TransactionFilter, TransactionKind, TransactionPage, TransactionPatch, TransactionSource,
 };
 use crate::error::AppResult;
 
@@ -48,6 +48,16 @@ pub trait CategoryRuleRepository {
     fn insert_rule(&self, input: &NewCategoryRule) -> AppResult<CategoryRule>;
     fn update_rule(&self, id: &str, patch: &CategoryRulePatch) -> AppResult<Option<CategoryRule>>;
     fn soft_delete_rule(&self, id: &str) -> AppResult<bool>;
+}
+
+pub trait StatisticsRepository {
+    fn monthly_summary(&self, months: i64) -> AppResult<Vec<MonthSummary>>;
+    fn category_breakdown(
+        &self,
+        month: Option<&str>,
+        kind: TransactionKind,
+    ) -> AppResult<Vec<CategorySlice>>;
+    fn daily_trend(&self, month: &str) -> AppResult<Vec<DailyPoint>>;
 }
 
 pub trait SyncChangeRepository {

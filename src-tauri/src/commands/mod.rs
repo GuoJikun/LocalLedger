@@ -5,9 +5,9 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::domain::{
-    Account, Category, CategoryPatch, CategoryRule, CategoryRulePatch, Device, NewCategory,
-    NewCategoryRule, NewTransaction, SyncChange, Transaction, TransactionFilter, TransactionPage,
-    TransactionPatch, TransactionSource,
+    Account, Category, CategoryPatch, CategoryRule, CategoryRulePatch, CategorySlice, DailyPoint,
+    Device, MonthSummary, NewCategory, NewCategoryRule, NewTransaction, SyncChange, Transaction,
+    TransactionFilter, TransactionKind, TransactionPage, TransactionPatch, TransactionSource,
 };
 use crate::error::AppError;
 use crate::importer::{
@@ -16,7 +16,7 @@ use crate::importer::{
 };
 use crate::repository::{
     AccountRepository, CategoryRepository, CategoryRuleRepository, SqliteRepository,
-    SyncChangeRepository, TransactionRepository,
+    StatisticsRepository, SyncChangeRepository, TransactionRepository,
 };
 use crate::state::AppState;
 
@@ -193,6 +193,37 @@ pub fn delete_category(id: String, state: State<'_, AppState>) -> Result<bool, S
     let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
     repo(&conn, &state)
         .soft_delete_category(&id)
+        .map_err(String::from)
+}
+
+#[tauri::command]
+pub fn monthly_summary(
+    months: i64,
+    state: State<'_, AppState>,
+) -> Result<Vec<MonthSummary>, String> {
+    let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
+    repo(&conn, &state)
+        .monthly_summary(months)
+        .map_err(String::from)
+}
+
+#[tauri::command]
+pub fn category_breakdown(
+    month: Option<String>,
+    kind: TransactionKind,
+    state: State<'_, AppState>,
+) -> Result<Vec<CategorySlice>, String> {
+    let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
+    repo(&conn, &state)
+        .category_breakdown(month.as_deref(), kind)
+        .map_err(String::from)
+}
+
+#[tauri::command]
+pub fn daily_trend(month: String, state: State<'_, AppState>) -> Result<Vec<DailyPoint>, String> {
+    let conn = state.conn.lock().map_err(|_| AppError::LockPoisoned)?;
+    repo(&conn, &state)
+        .daily_trend(&month)
         .map_err(String::from)
 }
 

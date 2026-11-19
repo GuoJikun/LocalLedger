@@ -1,19 +1,21 @@
 //! Repository 的 SQLite 实现：所有写操作都在事务内追加 `sync_changes`。
 
+use chrono::SecondsFormat;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row, ToSql};
 use serde::Serialize;
 use uuid::Uuid;
 
 use crate::domain::{
-    now, Account, Category, CategoryPatch, CategoryRule, CategoryRulePatch, EntityType,
-    NewCategory, NewCategoryRule, NewTransaction, SyncChange, SyncOp, Transaction,
-    TransactionFilter, TransactionKind, TransactionPage, TransactionPatch, TransactionSource,
+    now, Account, Category, CategoryPatch, CategoryRule, CategoryRulePatch, CategorySlice,
+    DailyPoint, EntityType, MonthSummary, NewCategory, NewCategoryRule, NewTransaction, SyncChange,
+    SyncOp, Transaction, TransactionFilter, TransactionKind, TransactionPage, TransactionPatch,
+    TransactionSource,
 };
 use crate::error::{AppError, AppResult};
 
 use super::{
-    AccountRepository, CategoryRepository, CategoryRuleRepository, SyncChangeRepository,
-    TransactionRepository,
+    AccountRepository, CategoryRepository, CategoryRuleRepository, StatisticsRepository,
+    SyncChangeRepository, TransactionRepository,
 };
 
 const TRANSACTION_COLUMNS: &str =
@@ -757,6 +759,97 @@ impl AccountRepository for SqliteRepository<'_> {
     }
 }
 
+impl StatisticsRepository for SqliteRepository<'_> {
+    fn monthly_summary(&self, months: i64) -> AppResult<Vec<MonthSummary>> {
+        let months = months.clamp(1, 120);
+        let since = chrono::Utc::now()
+            .checked_sub_months(chrono::Months::new(months as u32))
+            .unwrap_or_else(chrono::Utc::now)
+            .to_rfc3339_opts(SecondsFormat::Millis, true);
+
+        let mut statement = self.conn.prepare(
+            "SELECT substr(happened_at, 1, 7) AS month,
+                    COALESCE(SUM(CASE WHEN kind = 'income' THEN amount ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN kind = 'expense' THEN amount ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN kind = 'transfer' THEN amount ELSE 0 END), 0),
+                    COUNT(*)
+             FROM transactions
+             WHERE deleted = 0 AND happened_at >= ?1
+             GROUP BY month
+             ORDER BY month DESC",
+        )?;
+        let rows = statement.query_map([since], |row| {
+            Ok(MonthSummary {
+                month: row.get(0)?,
+                income: row.get(1)?,
+                expense: row.get(2)?,
+                transfer: row.get(3)?,
+                count: row.get(4)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+
+    fn category_breakdown(
+        &self,
+        month: Option<&str>,
+        kind: TransactionKind,
+    ) -> AppResult<Vec<CategorySlice>> {
+        let mut statement = self.conn.prepare(
+            "SELECT COALESCE(t.category_id, '__none__') AS category_id,
+                    COALESCE(c.name, '未分类') AS name,
+                    COALESCE(SUM(t.amount), 0) AS total,
+                    COUNT(*) AS cnt
+             FROM transactions t
+             LEFT JOIN categories c ON c.id = t.category_id
+             WHERE t.deleted = 0 AND t.kind = ?1
+                   AND (?2 IS NULL OR substr(t.happened_at, 1, 7) = ?2)
+             GROUP BY category_id
+             ORDER BY total DESC",
+        )?;
+        let rows = statement.query_map(params![kind.as_str(), month], |row| {
+            Ok(CategorySlice {
+                category_id: row.get(0)?,
+                name: row.get(1)?,
+                amount: row.get(2)?,
+                count: row.get(3)?,
+                percent: 0.0,
+            })
+        })?;
+        let mut slices = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+        let total: i64 = slices.iter().map(|slice| slice.amount).sum();
+        if total > 0 {
+            for slice in &mut slices {
+                slice.percent = slice.amount as f64 / total as f64 * 100.0;
+            }
+        }
+        Ok(slices)
+    }
+
+    fn daily_trend(&self, month: &str) -> AppResult<Vec<DailyPoint>> {
+        let pattern = format!("{month}%");
+        let mut statement = self.conn.prepare(
+            "SELECT substr(happened_at, 1, 10) AS day,
+                    COALESCE(SUM(CASE WHEN kind = 'income' THEN amount ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN kind = 'expense' THEN amount ELSE 0 END), 0)
+             FROM transactions
+             WHERE deleted = 0 AND happened_at LIKE ?1
+             GROUP BY day
+             ORDER BY day ASC",
+        )?;
+        let rows = statement.query_map([pattern], |row| {
+            Ok(DailyPoint {
+                day: row.get(0)?,
+                income: row.get(1)?,
+                expense: row.get(2)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+}
+
 impl SyncChangeRepository for SqliteRepository<'_> {
     fn list_since(&self, since_seq: i64, limit: i64) -> AppResult<Vec<SyncChange>> {
         let limit = limit.clamp(1, 10_000);
@@ -1031,6 +1124,76 @@ mod tests {
             .unwrap();
         assert_eq!(page.total, 3);
         assert_eq!(page.items.len(), 1);
+    }
+
+    #[test]
+    fn statistics_match_transactions() {
+        let conn = setup();
+        let repo = repository(&conn);
+        let make_at =
+            |id: &str, kind, amount, time: &str, category: Option<String>| NewTransaction {
+                external_id: id.to_string(),
+                kind,
+                amount,
+                counterparty: Some("测试".to_string()),
+                category_id: category,
+                happened_at: time.to_string(),
+                ..Default::default()
+            };
+
+        repo.insert_transaction(&make_at(
+            "S1",
+            TransactionKind::Income,
+            10_000,
+            "2026-11-05T04:00:00.000Z",
+            Some("cat_salary".to_string()),
+        ))
+        .unwrap();
+        repo.insert_transaction(&make_at(
+            "S2",
+            TransactionKind::Expense,
+            3_000,
+            "2026-11-06T04:00:00.000Z",
+            Some("cat_food".to_string()),
+        ))
+        .unwrap();
+        repo.insert_transaction(&make_at(
+            "S3",
+            TransactionKind::Expense,
+            2_000,
+            "2026-10-05T04:00:00.000Z",
+            Some("cat_transport".to_string()),
+        ))
+        .unwrap();
+        repo.insert_transaction(&make_at(
+            "S4",
+            TransactionKind::Income,
+            5_000,
+            "2026-11-07T04:00:00.000Z",
+            Some("cat_salary".to_string()),
+        ))
+        .unwrap();
+
+        let months = repo.monthly_summary(12).unwrap();
+        let november = months.iter().find(|item| item.month == "2026-11").unwrap();
+        assert_eq!(november.income, 15_000);
+        assert_eq!(november.expense, 3_000);
+        assert_eq!(november.count, 3);
+        assert!(months
+            .iter()
+            .any(|item| item.month == "2026-10" && item.expense == 2_000));
+
+        let slices = repo
+            .category_breakdown(Some("2026-11"), TransactionKind::Income)
+            .unwrap();
+        assert_eq!(slices.len(), 1);
+        assert_eq!(slices[0].name, "工资");
+        assert_eq!(slices[0].amount, 15_000);
+        assert!((slices[0].percent - 100.0).abs() < 0.01);
+
+        let trend = repo.daily_trend("2026-11").unwrap();
+        assert_eq!(trend.len(), 3);
+        assert_eq!(trend[0].day, "2026-11-05");
     }
 
     #[test]

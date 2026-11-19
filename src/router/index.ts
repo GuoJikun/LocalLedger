@@ -3,6 +3,7 @@ import OverviewView from "@/views/OverviewView.vue";
 import ImportView from "@/views/ImportView.vue";
 import TransactionsView from "@/views/TransactionsView.vue";
 import CategoriesView from "@/views/CategoriesView.vue";
+import StatsView from "@/views/StatsView.vue";
 import ModulePlaceholder from "@/components/ModulePlaceholder.vue";
 
 const routes: RouteRecordRaw[] = [
@@ -33,13 +34,8 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/statistics",
     name: "statistics",
-    component: ModulePlaceholder,
-    meta: {
-      title: "统计",
-      icon: "◔",
-      description: "月度收支、分类占比与趋势图，预计在 M4 实现。",
-      milestone: "M4",
-    },
+    component: StatsView,
+    meta: { title: "统计", icon: "◔" },
   },
   {
     path: "/settings",

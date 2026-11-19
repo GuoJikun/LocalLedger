@@ -14,6 +14,20 @@ export default defineConfig({
   },
   // Tauri 的 CLI 会解析 Vite 输出，清屏会影响日志阅读。
   clearScreen: false,
+  build: {
+    // 图表库拆分后仍约 550KB，高于默认 500KB 阈值，属预期。
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        // 图表库单独成块，避免主包过大。
+        manualChunks(id) {
+          if (id.includes("node_modules/echarts") || id.includes("node_modules/zrender")) {
+            return "charts";
+          }
+        },
+      },
+    },
+  },
   server: {
     port: 1420,
     strictPort: true,

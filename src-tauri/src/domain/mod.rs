@@ -141,6 +141,31 @@ pub struct CategoryRule {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MonthSummary {
+    pub month: String,
+    pub income: i64,
+    pub expense: i64,
+    pub transfer: i64,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CategorySlice {
+    pub category_id: String,
+    pub name: String,
+    pub amount: i64,
+    pub count: i64,
+    pub percent: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DailyPoint {
+    pub day: String,
+    pub income: i64,
+    pub expense: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SyncChange {
     pub seq: i64,
     pub entity_type: EntityType,

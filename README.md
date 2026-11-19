@@ -5,7 +5,7 @@
 - **数据只留在自己电脑**：无账号、无埋点、默认完全离线。
 - **技术栈**：Tauri 2 + Vue 3 + TypeScript + Rust + SQLite。
 - **平台**：Windows / macOS / Linux 同源。
-- **当前阶段**：M3 流水与分类（详见 [`docs/计划.md`](docs/计划.md)）。
+- **当前阶段**：M4 统计（详见 [`docs/计划.md`](docs/计划.md)）。
 
 ## 开发环境
 

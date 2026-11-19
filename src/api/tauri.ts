@@ -4,9 +4,12 @@ import type {
   Category,
   CategoryRule,
   CategoryRulePatch,
+  CategorySlice,
+  DailyPoint,
   DataOverview,
   Device,
   ImportSummary,
+  MonthSummary,
   NewCategory,
   NewCategoryRule,
   NewTransaction,
@@ -48,6 +51,11 @@ export const api = {
   listSyncChanges: (sinceSeq: number, limit = 500) =>
     invoke<SyncChange[]>("list_sync_changes", { sinceSeq, limit }),
   cursorVersion: () => invoke<number>("cursor_version"),
+
+  monthlySummary: (months: number) => invoke<MonthSummary[]>("monthly_summary", { months }),
+  categoryBreakdown: (month: string | null, kind: "income" | "expense") =>
+    invoke<CategorySlice[]>("category_breakdown", { month, kind }),
+  dailyTrend: (month: string) => invoke<DailyPoint[]>("daily_trend", { month }),
 
   previewBill: (path: string) => invoke<string>("preview_bill", { path }),
   importBill: (path: string) => invoke<ImportSummary>("import_bill", { path }),
