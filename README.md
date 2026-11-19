@@ -55,11 +55,11 @@ cargo test
 
 | 平台 | 目标 | 产物目录 |
 |---|---|---|
-| Windows | NSIS、MSI | `src-tauri/target/release/bundle/nsis`、`.../msi` |
+| Windows | NSIS | `src-tauri/target/release/bundle/nsis` |
 | macOS | dmg、app | `src-tauri/target/release/bundle/dmg`、`.../macos` |
-| Linux | deb、AppImage | `src-tauri/target/release/bundle/deb`、`.../appimage` |
+| Linux | deb、rpm、AppImage | `src-tauri/target/release/bundle/deb`、`.../rpm`、`.../appimage` |
 
-三端同发由 `.github/workflows/release.yml` 在推送 `v*` 标签时触发，产物上传为 CI artifact。macOS 签名与公证需要开发者账号，配置 `APPLE_SIGNING_IDENTITY` / `APPLE_NOTARIZE_*` 后在 macOS 构建机上启用；未配置时产出未签名包。Windows MSI 需要 WiX Toolset，CI 默认只打包 NSIS。
+三端同发由 `.github/workflows/release.yml` 在推送 `v*` 标签时触发，产物上传为 CI artifact。macOS 签名与公证需要开发者账号，配置 `APPLE_SIGNING_IDENTITY` / `APPLE_NOTARIZE_*` 后在 macOS 构建机上启用；未配置时产出未签名包。Windows 当前只打包 NSIS（不依赖 WiX Toolset）。
 
 CI（`.github/workflows/ci.yml`）在 Windows / macOS / Linux 三平台执行格式化、clippy、测试、前端构建与 Tauri 编译。
 

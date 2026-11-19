@@ -49,9 +49,9 @@ jobs:
         if: matrix.platform == 'macos-latest'
         run: pnpm tauri build --bundles dmg,app
 
-      - name: 打包 Linux（deb + AppImage）
+      - name: 打包 Linux（deb + rpm + AppImage）
         if: matrix.platform == 'ubuntu-latest'
-        run: pnpm tauri build --bundles deb,appimage
+        run: pnpm tauri build --bundles deb,rpm,appimage
 
       - name: 上传安装包
         uses: actions/upload-artifact@v4
