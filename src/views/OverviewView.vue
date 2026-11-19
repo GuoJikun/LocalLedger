@@ -220,7 +220,7 @@ onMounted(loadData);
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 110px), 1fr));
   gap: 8px;
   margin-bottom: 18px;
 }

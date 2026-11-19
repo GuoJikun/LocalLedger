@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
-import { RouterLink, RouterView, useRoute } from "vue-router";
+import { onMounted, onUnmounted, ref } from "vue";
+import { RouterLink, RouterView } from "vue-router";
 import { ElButton, ElIcon } from "element-plus";
 import {
   Close,
@@ -11,7 +11,6 @@ import {
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-const route = useRoute();
 const inTauri = isTauri();
 const maximized = ref(false);
 
@@ -23,8 +22,6 @@ const navItems = [
   { to: "/statistics", icon: "◔", label: "统计" },
   { to: "/settings", icon: "⚙", label: "设置" },
 ];
-
-const currentTitle = computed(() => String(route.meta.title ?? "净账"));
 
 async function syncMaximized() {
   if (!inTauri) return;
@@ -101,11 +98,7 @@ onUnmounted(() => window.removeEventListener("resize", syncMaximized));
 
     <div class="main">
       <header class="topbar">
-        <div class="drag-area" data-tauri-drag-region @dblclick="toggleMaximize">
-          <span class="app-name">净账 LocalLedger</span>
-          <span class="divider"></span>
-          <h1 class="page-title">{{ currentTitle }}</h1>
-        </div>
+        <div class="drag-area" data-tauri-drag-region @dblclick="toggleMaximize"></div>
 
         <div v-if="inTauri" class="window-controls">
           <ElButton class="win-btn" text circle title="最小化" @click="minimize">
@@ -257,27 +250,6 @@ nav {
   flex: 1;
   height: 100%;
   min-width: 0;
-}
-
-.app-name {
-  color: var(--text-faint);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.divider {
-  width: 1px;
-  height: 14px;
-  background: var(--border);
-}
-
-.page-title {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .window-controls {
