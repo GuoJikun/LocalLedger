@@ -1,0 +1,112 @@
+export type TransactionKind = "income" | "expense" | "transfer";
+export type TransactionSource = "alipay" | "wechat" | "manual";
+
+export interface Device {
+  id: string;
+  name: string;
+  last_seen_at: string;
+}
+
+export interface Account {
+  id: string;
+  name: string;
+  kind: string;
+  created_at: string;
+  updated_at: string;
+  device_id: string;
+  version: number;
+  deleted: boolean;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  icon: string | null;
+  color: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  device_id: string;
+  version: number;
+  deleted: boolean;
+}
+
+export interface Transaction {
+  id: string;
+  account_id: string;
+  source: TransactionSource;
+  external_id: string;
+  kind: TransactionKind;
+  /** 单位：分 */
+  amount: number;
+  counterparty: string | null;
+  category_id: string | null;
+  note: string | null;
+  happened_at: string;
+  payment_method: string | null;
+  status: string | null;
+  raw_data: string | null;
+  created_at: string;
+  updated_at: string;
+  device_id: string;
+  version: number;
+  deleted: boolean;
+}
+
+export interface NewTransaction {
+  account_id: string;
+  source: TransactionSource;
+  external_id: string;
+  kind: TransactionKind;
+  amount: number;
+  counterparty: string | null;
+  category_id: string | null;
+  note: string | null;
+  happened_at: string;
+  payment_method: string | null;
+  status: string | null;
+  raw_data: string | null;
+}
+
+export interface NewCategory {
+  name: string;
+  parent_id: string | null;
+  icon: string | null;
+  color: string | null;
+  sort_order: number;
+}
+
+export interface DataOverview {
+  device_id: string;
+  device_name: string;
+  database_path: string;
+  account_count: number;
+  transaction_count: number;
+  category_count: number;
+  pending_changes: number;
+}
+
+export interface SyncChange {
+  seq: number;
+  entity_type: "account" | "transaction" | "category" | "category_rule";
+  entity_id: string;
+  op: "insert" | "update" | "delete";
+  payload: string | null;
+  created_at: string;
+  device_id: string;
+}
+
+/** 元 → 分，避免浮点误差。 */
+export function yuanToFen(yuan: string): number {
+  const value = Number(yuan);
+  if (!Number.isFinite(value)) return NaN;
+  return Math.round(value * 100);
+}
+
+/** 分 → 展示用字符串。 */
+export function formatAmount(fen: number): string {
+  const sign = fen < 0 ? "-" : "";
+  const abs = Math.abs(fen);
+  return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
+}
