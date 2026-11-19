@@ -1,5 +1,14 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
+import {
+  ElButton,
+  ElDatePicker,
+  ElForm,
+  ElFormItem,
+  ElInput,
+  ElOption,
+  ElSelect,
+} from "element-plus";
 import { api } from "@/api/tauri";
 import { formatAmount, yuanToFen } from "@/types/domain";
 import type {
@@ -200,26 +209,59 @@ onMounted(async () => {
       <button type="button" class="primary" @click="openNew">＋ 手工记一笔</button>
     </header>
 
-    <section class="filters">
-      <label>关键词<input v-model="filter.keyword" type="text" placeholder="对方 / 备注 / 单号" @keyup.enter="applyFilter" /></label>
-      <label>类型
-        <select v-model="filter.kind">
-          <option :value="undefined">全部</option>
-          <option v-for="item in kindOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
-      </label>
-      <label>分类
-        <select v-model="filter.category_id">
-          <option :value="undefined">全部</option>
-          <option value="__none__">未分类</option>
-          <option v-for="item in categories" :key="item.id" :value="item.id">{{ item.name }}</option>
-        </select>
-      </label>
-      <label>起始日期<input v-model="filter.from" type="date" /></label>
-      <label>结束日期<input v-model="filter.to" type="date" /></label>
-      <button type="button" class="primary" @click="applyFilter">筛选</button>
-      <button type="button" class="ghost" @click="resetFilter">重置</button>
-    </section>
+    <ElForm class="filters" :inline="true" @submit.prevent="applyFilter">
+      <ElFormItem label="关键词">
+        <ElInput
+          v-model="filter.keyword"
+          placeholder="对方 / 备注 / 单号"
+          clearable
+          @keyup.enter="applyFilter"
+        />
+      </ElFormItem>
+      <ElFormItem label="类型">
+        <ElSelect v-model="filter.kind" placeholder="全部" clearable class="filter-select">
+          <ElOption
+            v-for="item in kindOptions"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
+        </ElSelect>
+      </ElFormItem>
+      <ElFormItem label="分类">
+        <ElSelect v-model="filter.category_id" placeholder="全部" clearable class="filter-select">
+          <ElOption label="未分类" value="__none__" />
+          <ElOption
+            v-for="item in categories"
+            :key="item.id"
+            :label="item.name"
+            :value="item.id"
+          />
+        </ElSelect>
+      </ElFormItem>
+      <ElFormItem label="起始日期">
+        <ElDatePicker
+          v-model="filter.from"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="选择日期"
+          class="filter-date"
+        />
+      </ElFormItem>
+      <ElFormItem label="结束日期">
+        <ElDatePicker
+          v-model="filter.to"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="选择日期"
+          class="filter-date"
+        />
+      </ElFormItem>
+      <ElFormItem>
+        <ElButton type="primary" @click="applyFilter">筛选</ElButton>
+        <ElButton @click="resetFilter">重置</ElButton>
+      </ElFormItem>
+    </ElForm>
 
     <p v-if="error" class="error">{{ error }}</p>
 
@@ -328,7 +370,7 @@ onMounted(async () => {
   color: var(--text-muted);
 }
 
-button {
+button:not(.el-button) {
   padding: 7px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -354,17 +396,25 @@ button:disabled {
 }
 
 .filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
 }
 
-label {
+.filters :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.filter-select {
+  width: 120px;
+}
+
+.filter-date {
+  width: 150px;
+}
+
+.editor label {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -372,8 +422,8 @@ label {
   font-size: 12px;
 }
 
-input,
-select {
+.editor input,
+.editor select {
   padding: 7px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
