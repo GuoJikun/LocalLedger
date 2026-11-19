@@ -114,8 +114,9 @@ fn decode_utf16(bytes: &[u8], little_endian: bool) -> String {
 /// 依据头部说明行与表头关键字识别平台。
 pub fn detect(text: &str) -> ImportResult<Platform> {
     let head: String = text.lines().take(30).collect::<Vec<_>>().join("\n");
-    let has_alipay =
-        head.contains("支付宝") || (head.contains("交易号") && head.contains("交易分类"));
+    let has_alipay = head.contains("支付宝")
+        || head.contains("交易订单号")
+        || (head.contains("交易号") && head.contains("交易分类"));
     let has_wechat =
         head.contains("微信") || (head.contains("交易单号") && head.contains("当前状态"));
 
@@ -142,10 +143,17 @@ pub(crate) fn read_table<F>(text: &str, header_predicate: F) -> ImportResult<Csv
 where
     F: Fn(&[String]) -> bool,
 {
+    // 支付宝部分导出为制表符分隔（TSV 内容但扩展名仍是 .csv），按样本自动选择分隔符。
+    let sample: String = text.lines().take(20).collect::<Vec<_>>().join("\n");
+    let tabs = sample.matches('\t').count();
+    let commas = sample.matches(',').count();
+    let delimiter = if tabs > commas { b'\t' } else { b',' };
+
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(false)
         .flexible(true)
         .trim(csv::Trim::All)
+        .delimiter(delimiter)
         .from_reader(text.as_bytes());
 
     let mut columns: Option<Vec<String>> = None;

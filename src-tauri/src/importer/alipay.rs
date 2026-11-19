@@ -12,15 +12,18 @@ pub fn parse(text: &str) -> ImportResult<ParsedBill> {
     }
 
     let (columns, records) = read_table(text, |header| {
-        header.iter().any(|value| value.contains("交易号"))
+        header
+            .iter()
+            .any(|value| value.contains("交易号") || value.contains("交易订单号"))
             && header.iter().any(|value| value.contains("交易时间"))
     })?;
 
-    let id = column_index(&columns, &["交易号", "交易订单号"]);
+    let id = column_index(&columns, &["交易订单号", "交易号", "商家订单号"]);
     let time = column_index(&columns, &["交易时间", "交易创建时间"]);
     let category = column_index(&columns, &["交易分类"]);
     let counterparty = column_index(&columns, &["交易对方"]);
     let product = column_index(&columns, &["商品说明", "商品"]);
+    let remark = column_index(&columns, &["备注"]);
     let flow = column_index(&columns, &["收/支", "收支"]);
     let amount = column_index(&columns, &["金额", "金额(元)"]);
     let payment = column_index(&columns, &["收/付款方式", "支付方式"]);
@@ -83,7 +86,16 @@ pub fn parse(text: &str) -> ImportResult<ParsedBill> {
             }
         };
 
-        let note = optional(cell(&record, product));
+        let product_text = cell(&record, product);
+        let remark_text = cell(&record, remark);
+        let note = match (product_text, remark_text) {
+            (product, remark) if !product.is_empty() && !remark.is_empty() => {
+                Some(format!("{product} / {remark}"))
+            }
+            (product, _) if !product.is_empty() => Some(product),
+            (_, remark) if !remark.is_empty() => Some(remark),
+            _ => None,
+        };
         rows.push(ParsedRow {
             line,
             input: NewTransaction {
@@ -139,5 +151,32 @@ mod tests {
         assert_eq!(salary.input.amount, 1_200_000);
 
         assert!(bill.issues[0].reason.contains("交易失败"));
+    }
+
+    const TAB_SAMPLE: &str = include_str!("../../tests/fixtures/alipay_tab_sample.csv");
+
+    #[test]
+    fn parses_real_tab_separated_header() {
+        // 用户实际导出格式：Tab 分隔、无「交易号」列、列名带首尾空格、含商家订单号与备注。
+        assert_eq!(super::super::detect(TAB_SAMPLE).unwrap(), Platform::Alipay);
+
+        let bill = parse(TAB_SAMPLE).unwrap();
+        assert_eq!(bill.rows.len(), 3);
+        assert_eq!(bill.issues.len(), 1);
+
+        let first = &bill.rows[0];
+        assert_eq!(first.input.external_id, "ALI-TAB-001");
+        assert_eq!(first.input.amount, 3550);
+        assert_eq!(first.input.counterparty.as_deref(), Some("美团外卖"));
+        assert_eq!(first.input.note.as_deref(), Some("午餐 / 工作日午餐"));
+        assert_eq!(first.input.status.as_deref(), Some("交易成功"));
+        assert_eq!(first.input.payment_method.as_deref(), Some("余额宝"));
+        assert_eq!(first.input.happened_at, "2026-01-05T04:00:00.000Z");
+
+        let salary = &bill.rows[1];
+        assert_eq!(salary.input.kind, TransactionKind::Income);
+        assert_eq!(salary.input.amount, 1_200_000);
+        assert_eq!(salary.input.external_id, "ALI-TAB-002");
+        assert_eq!(salary.category_hint.as_deref(), Some("工资"));
     }
 }
